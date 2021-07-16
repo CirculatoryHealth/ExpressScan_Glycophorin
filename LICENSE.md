@@ -55,7 +55,7 @@ exhaustive, and do not form part of our licenses.
 =======================================================================
 
 Creative Commons Attribution-NonCommercial-NoDerivatives 4.0
-International Public License
+International Public License 
 
 By exercising the Licensed Rights (defined below), You accept and agree
 to be bound by the terms and conditions of this Creative Commons
