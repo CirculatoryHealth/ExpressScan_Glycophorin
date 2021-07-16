@@ -1,0 +1,2391 @@
+---
+title: "Express Scan - Glycophorin C in plaque is associated with MACE"
+author: "[Joost. M. Mekke, MD]
+date: "'r. Sys.Date()'"
+output:
+  html_notebook:
+    cache: yes
+    code_folding: hide
+    collapse: yes
+    df_print: paged
+    fig.align: center
+    fig_caption: yes
+    fig_height: 7
+    fig_retina: 2
+    fig_width: 7
+    hightlight: tango
+    theme: lumen
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+mainfont: Arial
+subtitle: An 'Express Scan' project
+editor_options:
+  chunk_output_type: inline
+---
+```{r global_options, include = FALSE}
+# further define some knitr-options.
+knitr::opts_chunk$set(fig.width = 12, fig.height = 8, fig.path = 'Figures/', eval=TRUE, warning=FALSE, message = FALSE)
+```
+
+# Preparation
+Clean the environment
+```{r ClearEnvironment, include = FALSE}
+rm(list=ls())
+```
+
+Set locations, and the working directory.
+```{r LocalSystem, include=FALSE}
+### MacBook Pro
+ROOT_loc ="/Users/joostmekke"
+PHD_loc= paste0(ROOT_loc,"/PhD")
+PROJECT_loc = paste0(PHD_loc, "/Analyses/ExpressScan")
+AEDB_loc = paste0(PHD_loc, "/Databases/ExpressScan")
+
+### SOME VARIABLES WE NEED DOWN THE LINE
+PROJECTNAME = "Glycophorin"
+
+cat("\nCreate a new analysis directory...\n")
+ifelse(!dir.exists(file.path(PROJECT_loc, "/",PROJECTNAME)), 
+       dir.create(file.path(PROJECT_loc, "/",PROJECTNAME)), 
+       FALSE)
+ANALYSIS_loc = paste0(PROJECT_loc,"/",PROJECTNAME)
+# Plots
+ifelse(!dir.exists(file.path(ANALYSIS_loc, "/PLOTS")), 
+       dir.create(file.path(ANALYSIS_loc, "/PLOTS")), 
+       FALSE)
+PLOT_loc = paste0(ANALYSIS_loc,"/PLOTS")
+# Quality Control plots
+ifelse(!dir.exists(file.path(PLOT_loc, "/QC")), 
+       dir.create(file.path(PLOT_loc, "/QC")), 
+       FALSE)
+QC_loc = paste0(PLOT_loc,"/QC")
+# Output files
+ifelse(!dir.exists(file.path(ANALYSIS_loc, "/OUTPUT")), 
+       dir.create(file.path(ANALYSIS_loc, "/OUTPUT")), 
+       FALSE)
+OUT_loc = paste0(ANALYSIS_loc, "/OUTPUT")
+# COX analysis
+ifelse(!dir.exists(file.path(ANALYSIS_loc, "/COX")), 
+       dir.create(file.path(ANALYSIS_loc, "/COX")), 
+       FALSE)
+COX_loc = paste0(ANALYSIS_loc, "/COX")
+# Baseline characteristics
+ifelse(!dir.exists(file.path(ANALYSIS_loc, "/BASELINE")), 
+       dir.create(file.path(ANALYSIS_loc, "/BASELINE")), 
+       FALSE)
+BASELINE_loc = paste0(ANALYSIS_loc, "/BASELINE")
+
+cat("\nSetting working directory and listing its contents.\n")
+setwd(paste0(PROJECT_loc))
+getwd()
+list.files()
+```
+A package-installation function.
+```{r Function: installations, include = FALSE}
+install.packages.auto <- function(x) { 
+  x <- as.character(substitute(x)) 
+  if(isTRUE(x %in% .packages(all.available = TRUE))) { 
+    eval(parse(text = sprintf("require(\"%s\")", x)))
+  } else { 
+    # Update installed packages - this may mean a full upgrade of R, which in turn
+    # may not be warrented. 
+    # update.install.packages.auto(ask = FALSE) 
+    eval(parse(text = sprintf("install.packages(\"%s\", dependencies = TRUE, repos = \"https://cloud.r-project.org/\")", x)))
+  }
+  if(isTRUE(x %in% .packages(all.available = TRUE))) { 
+    eval(parse(text = sprintf("require(\"%s\")", x)))
+  } else {
+    if (!requireNamespace("BiocManager"))
+      install.packages("BiocManager")
+    # BiocManager::install() # this would entail updating installed packages, which in turned may not be warrented
+    eval(parse(text = sprintf("BiocManager::install(\"%s\")", x)))
+    eval(parse(text = sprintf("require(\"%s\")", x)))
+  }
+}
+```
+Load those packages.
+```{r Setting: loading_packages, include = FALSE}
+install.packages.auto("readr")
+install.packages.auto("optparse")
+install.packages.auto("tools")
+install.packages.auto("dplyr")
+install.packages.auto("tidyr")
+install.packages.auto("naniar")
+
+# To get 'data.table' with 'fwrite' to be able to directly write gzipped-files
+# Ref: https://stackoverflow.com/questions/42788401/is-possible-to-use-fwrite-from-data-table-with-gzfile
+# install.packages("data.table", repos = "https://Rdatatable.gitlab.io/data.table")
+library(data.table)
+
+install.packages.auto("tidyverse")
+install.packages.auto("knitr")
+install.packages.auto("DT")
+install.packages.auto("MASS")
+# install.packages.auto("Seurat") # latest version
+
+# Install the devtools package from Hadley Wickham
+install.packages.auto('devtools')
+
+install.packages.auto("haven")
+install.packages.auto("sjlabelled")
+install.packages.auto("sjPlot")
+install.packages.auto("labelled")
+install.packages.auto("tableone")
+install.packages.auto("foreign")
+install.packages.auto("ggpubr")
+install.packages.auto("ggplot2")
+install.packages.auto("survival")
+install.packages.auto("finalfit")
+install.packages.auto("car")
+```
+We will create a datestamp and define the Utrecht Science Park Colour Scheme.
+```{R Setting: Colors, include = FALSE}
+
+Today = format(as.Date(as.POSIXlt(Sys.time())), "%Y%m%d")
+Today.Report = format(as.Date(as.POSIXlt(Sys.time())), "%A, %B %d, %Y")
+
+### UtrechtScienceParkColoursScheme
+###
+### WebsitetoconvertHEXtoRGB:http://hex.colorrrs.com.
+### Forsomefunctionsyoushoulddividethesenumbersby255.
+### 
+###	No.	Color			      HEX	(RGB)						              CHR		  MAF/INFO
+###---------------------------------------------------------------------------------------
+###	1	  yellow			    #FBB820 (251,184,32)				      =>	1		or 1.0>INFO
+###	2	  gold			      #F59D10 (245,157,16)				      =>	2		
+###	3	  salmon			    #E55738 (229,87,56)				      =>	3		or 0.05<MAF<0.2 or 0.4<INFO<0.6
+###	4	  darkpink		    #DB003F ((219,0,63)				      =>	4		
+###	5	  lightpink		    #E35493 (227,84,147)				      =>	5		or 0.8<INFO<1.0
+###	6	  pink			      #D5267B (213,38,123)				      =>	6		
+###	7	  hardpink		    #CC0071 (204,0,113)				      =>	7		
+###	8	  lightpurple	    #A8448A (168,68,138)				      =>	8		
+###	9	  purple			    #9A3480 (154,52,128)				      =>	9		
+###	10	lavendel		    #8D5B9A (141,91,154)				      =>	10		
+###	11	bluepurple		  #705296 (112,82,150)				      =>	11		
+###	12	purpleblue		  #686AA9 (104,106,169)			      =>	12		
+###	13	lightpurpleblue	#6173AD (97,115,173/101,120,180)	=>	13		
+###	14	seablue			    #4C81BF (76,129,191)				      =>	14		
+###	15	skyblue			    #2F8BC9 (47,139,201)				      =>	15		
+###	16	azurblue		    #1290D9 (18,144,217)				      =>	16		or 0.01<MAF<0.05 or 0.2<INFO<0.4
+###	17	lightazurblue	  #1396D8 (19,150,216)				      =>	17		
+###	18	greenblue		    #15A6C1 (21,166,193)				      =>	18		
+###	19	seaweedgreen	  #5EB17F (94,177,127)				      =>	19		
+###	20	yellowgreen		  #86B833 (134,184,51)				      =>	20		
+###	21	lightmossgreen	#C5D220 (197,210,32)				      =>	21		
+###	22	mossgreen		    #9FC228 (159,194,40)				      =>	22		or MAF>0.20 or 0.6<INFO<0.8
+###	23	lightgreen	  	#78B113 (120,177,19)				      =>	23/X
+###	24	green			      #49A01D (73,160,29)				      =>	24/Y
+###	25	grey			      #595A5C (89,90,92)				        =>	25/XY	or MAF<0.01 or 0.0<INFO<0.2
+###	26	lightgrey		    #A2A3A4	(162,163,164)			      =>	26/MT
+###
+###	ADDITIONAL COLORS
+###	27	midgrey			#D7D8D7
+###	28	verylightgrey	#ECECEC"
+###	29	white			#FFFFFF
+###	30	black			#000000
+###----------------------------------------------------------------------------------------------
+
+uithof_color = c("#FBB820","#F59D10","#E55738","#DB003F","#E35493","#D5267B",
+                 "#CC0071","#A8448A","#9A3480","#8D5B9A","#705296","#686AA9",
+                 "#6173AD","#4C81BF","#2F8BC9","#1290D9","#1396D8","#15A6C1",
+                 "#5EB17F","#86B833","#C5D220","#9FC228","#78B113","#49A01D",
+                 "#595A5C","#A2A3A4", "#D7D8D7", "#ECECEC", "#FFFFFF", "#000000")
+
+uithof_color_legend = c("#FBB820", "#F59D10", "#E55738", "#DB003F", "#E35493",
+                        "#D5267B", "#CC0071", "#A8448A", "#9A3480", "#8D5B9A",
+                        "#705296", "#686AA9", "#6173AD", "#4C81BF", "#2F8BC9",
+                        "#1290D9", "#1396D8", "#15A6C1", "#5EB17F", "#86B833",
+                        "#C5D220", "#9FC228", "#78B113", "#49A01D", "#595A5C",
+                        "#A2A3A4", "#D7D8D7", "#ECECEC", "#FFFFFF", "#000000")
+
+#ggplot2 default color palette
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]}
+```
+
+# Background
+
+## Objectives
+Our aim was to explore associations of Glycophorin C and other quantified plaque characteristics with: 
+(i) a major histopathological feature of plaque vulnerability, intraplaque hemorrhage; 
+(ii) clinical plaque instability, as defined by a symptomatic plaque causing an acute cerebrovascular event; and 
+(iii) secondary major adverse cardiovascular events (MACE) occurring after plaque removal
+
+## Methods
+
+# Loading data
+
+## Clinical data
+Loading the Athero-Express clinical data
+```{r Load AE clinical database}
+require(haven)
+Clinicaldata <-haven::read_sav(paste0(AEDB_loc,"/20202705 Clinical Data.sav"))
+head(Clinicaldata)
+
+```
+
+## Plaque SlideToolkit data
+Loading the Athero-Express raw slideToolkit data.
+```{r Load AE SlideToolkit plaque characteristics}
+CD34 <-read.table("/Users/joostmekke/PhD/Databases/ExpressScan/SlideToolkit data/20200729.ExpressScan.QC.CD34.data.txt", header = TRUE)
+CD66b <- read.table("/Users/joostmekke/PhD/Databases/ExpressScan/SlideToolkit data/20200729.ExpressScan.QC.CD66b.data.txt",header=TRUE)
+CD68 <- read.table("/Users/joostmekke/PhD/Databases/ExpressScan/SlideToolkit data/20200729.ExpressScan.QC.CD68.data.txt",header=TRUE)
+EVG <- read.table("/Users/joostmekke/PhD/Databases/ExpressScan/SlideToolkit data/20200729.ExpressScan.QC.EVG.data.txt",header=TRUE)
+Glycc <-read.table("/Users/joostmekke/PhD/Databases/ExpressScan/SlideToolkit data/20201112.ExpressScan.QC.GLYCC.data.txt",header=TRUE)
+HE <-read.table("/Users/joostmekke/PhD/Databases/ExpressScan/SlideToolkit data/20200729.ExpressScan.QC.HE.data.txt",header=TRUE)
+SMA <-read.table("/Users/joostmekke/PhD/Databases/ExpressScan/SlideToolkit data/20200729.ExpressScan.QC.SMA.data.txt",header=TRUE)
+
+# Changing the name of the variables: Plaquesize, TotalTissueCounts, and Source
+names(CD34)[names(CD34) == "TotalTissue"] <- "PlaquesizeCD34"
+names(CD66b)[names(CD66b) == "TotalTissue"] <- "PlaquesizeCD66b"
+names(CD68)[names(CD68) == "TotalTissue"] <- "PlaquesizeCD68"
+names(EVG)[names(EVG) == "TotalTissue"] <- "PlaquesizeEVG"
+names(Glycc)[names(Glycc) == "Plaquesize"] <- "PlaquesizeGlycc"
+names(HE)[names(HE) == "TotalTissue"] <- "PlaquesizeHE"
+names(SMA)[names(SMA) == "TotalTissue"] <- "PlaquesizeSMA"
+
+names(CD34)[names(CD34) == "TotalTissueCounts"] <- "TotalTissueCountsCD34"
+names(CD66b)[names(CD66b) == "TotalTissueCounts"] <- "TotalTissueCountsCD66b"
+names(CD68)[names(CD68) == "TotalTissueCounts"] <- "TotalTissueCountsCD68"
+names(EVG)[names(EVG) == "TotalTissueCounts"] <- "TotalTissueCountsEVG"
+names(Glycc)[names(Glycc) == "TotalTissueCounts"] <- "TotalTissueCountsGlycc"
+names(HE)[names(HE) == "TotalTissueCounts"] <- "TotalTissueCountsHE"
+names(SMA)[names(SMA) == "TotalTissueCounts"] <- "TotalTissueCountsSMA"
+
+names(CD34)[names(CD34) == "Source"] <- "SourceCD34"
+names(CD66b)[names(CD66b) == "Source"] <- "SourceCD66b"
+names(CD68)[names(CD68) == "Source"] <- "SourceCD68"
+names(EVG)[names(EVG) == "Source"] <- "SourceEVG"
+names(Glycc)[names(Glycc) == "Source"] <- "SourceGlycc"
+names(HE)[names(HE) == "Source"] <- "SourceHE"
+names(SMA)[names(SMA) == "Source"] <- "SourceSMA"
+```
+
+### Inspect Plaque SlideToolkit data
+We know that the plaquesizes are not normally distributed and therefore we will standardise them as follows: 
+`z = ( x - μ ) / σ`
+Where for each sample, `x` equals the value of the variable, `μ` (_mu_) equals the mean of `x`, and `σ` (_sigma_) equals the standard deviation of `x`.
+```{r}
+# Calculating the Z-score for the Plaquesize of the stainings
+CD34$PlaquesizeCD34_Z <- (CD34$PlaquesizeCD34 - mean(CD34$PlaquesizeCD34))/sd(CD34$PlaquesizeCD34)
+CD66b$PlaquesizeCD66b_Z <- (CD66b$PlaquesizeCD66b - mean(CD66b$PlaquesizeCD66b))/sd(CD66b$PlaquesizeCD66b)
+CD68$PlaquesizeCD68_Z <- (CD68$PlaquesizeCD68 - mean(CD68$PlaquesizeCD68))/sd(CD68$PlaquesizeCD68)
+EVG$PlaquesizeEVG_Z <- (EVG$PlaquesizeEVG - mean(EVG$PlaquesizeEVG))/sd(EVG$PlaquesizeEVG)
+Glycc$PlaquesizeGlycc_Z <- (Glycc$PlaquesizeGlycc - mean(Glycc$PlaquesizeGlycc))/sd(Glycc$PlaquesizeGlycc)
+HE$PlaquesizeHE_Z <- (HE$PlaquesizeHE - mean(HE$PlaquesizeHE))/sd(HE$PlaquesizeHE)
+SMA$PlaquesizeSMA_Z <- (SMA$PlaquesizeSMA - mean(SMA$PlaquesizeSMA))/sd(SMA$PlaquesizeSMA)
+
+# Creating new subsets based on Z-score <=3 (arbitrary way of excluding outliers from the dataset)
+CD34_selection <-as.data.frame(subset(CD34, subset = PlaquesizeCD34_Z <= 3, drop = TRUE)) #1807 -> 1780, 27 outliers
+CD66b_selection <-as.data.frame(subset(CD66b, subset = PlaquesizeCD66b_Z <= 3, drop = TRUE)) #1154 -> 1125, 29 outliers
+CD68_selection <-as.data.frame(subset(CD68, subset = PlaquesizeCD68_Z <= 3, drop = TRUE)) #2943 -> 2892, 51 outliers
+EVG_selection <-as.data.frame(subset(EVG, subset = PlaquesizeEVG_Z <= 3, drop = TRUE)) #2729 -> 2680, 49 outliers
+Glycc_selection <-as.data.frame(subset(Glycc, subset = PlaquesizeGlycc_Z <= 3, drop = TRUE)) #2066 -> 2028, 38 outliers
+HE_selection <-as.data.frame(subset(HE, subset = PlaquesizeHE_Z <= 3, drop = TRUE)) # 2561 -> 2515, 46 outliers 
+SMA_selection <-as.data.frame(subset(SMA, subset = PlaquesizeSMA_Z <= 3, drop = TRUE)) #2878 -> 2828, 50 outliers
+
+# Merging the SlideToolkit dataframes to one dataframe "Staining
+MyMerge <- function(x,y){df <-merge(x,y, by="STUDY_NUMBER", all.x=TRUE, all.y=TRUE)
+return(df)}
+Staining <- Reduce(MyMerge, list(CD34_selection,CD66b_selection,CD68_selection,EVG_selection,Glycc_selection,HE_selection,SMA_selection))
+
+rm(CD34,CD66b,CD68,EVG,Glycc,HE,SMA,CD34_selection,CD66b_selection,CD68_selection,EVG_selection,Glycc_selection,HE_selection,SMA_selection)
+
+# Removing multiple columns from the dataframe "Staining" that cause some unneeded "noise" due to similarities in naming.
+#Staining <- subset(Staining, select = c("STUDY_NUMBER","PlaquesizeCD34","CountObjects_CD34","Total_CD34_TissueCount","SourceCD34","PlaquesizeCD66b", "CountObjects_CD66b","Total_CD66b_TissueCount","SourceCD66b", "PlaquesizeCD68", "CountObjects_CD68", "Total_CD68_TissueCount", "SourceCD68", "PlaquesizeEVG", "Total_EVG_Tissue", "SourceEVG", "Percentage_EVG","Total_GLYCC_Tissue", "PlaquesizeGlycc", "SourceGlycc", "Percentage_GLYCC", "PlaquesizeHE", "CountObjects_HE", "Total_HE_TissueCount", "SourceHE", "PlaquesizeSMA", "CountObjects_SMA", "Total_SMA_TissueCount","SourceSMA"))
+#head(Staining)
+
+## Inverse rank normalization of Staining variables
+# CD34 + plaque size of CD34 measurement
+Staining$Total_CD34_TissueCount_rank <- qnorm((rank(Staining$Total_CD34_TissueCount, na.last = "keep") - 0.5) / sum(!is.na(Staining$Total_CD34_TissueCount)))
+Staining$PlaquesizeCD34_rank <- qnorm((rank(Staining$PlaquesizeCD34, na.last = "keep") - 0.5) / sum(!is.na(Staining$PlaquesizeCD34)))
+# CD66b + plaque size of CD66b measurement
+Staining$Total_CD66b_TissueCount_rank <- qnorm((rank(Staining$Total_CD66b_TissueCount, na.last = "keep") - 0.5) / sum(!is.na(Staining$Total_CD66b_TissueCount)))
+Staining$PlaquesizeCD66b_rank <- qnorm((rank(Staining$PlaquesizeCD66b, na.last = "keep") - 0.5) / sum(!is.na(Staining$PlaquesizeCD66b)))
+# CD68 + plaque size of CD68 measurement
+Staining$Total_CD68_TissueCount_rank <- qnorm((rank(Staining$Total_CD68_TissueCount, na.last = "keep") - 0.5) / sum(!is.na(Staining$Total_CD68_TissueCount)))
+Staining$PlaquesizeCD68_rank <- qnorm((rank(Staining$PlaquesizeCD68, na.last = "keep") - 0.5) / sum(!is.na(Staining$PlaquesizeCD68)))
+# SMA + plaque size of SMA measurement
+Staining$Total_SMA_TissueCount_rank <- qnorm((rank(Staining$Total_SMA_TissueCount, na.last = "keep") - 0.5) / sum(!is.na(Staining$Total_SMA_TissueCount)))
+Staining$PlaquesizeSMA_rank <- qnorm((rank(Staining$PlaquesizeSMA, na.last = "keep") - 0.5) / sum(!is.na(Staining$PlaquesizeSMA)))
+# HE + plaque size of HE measurement
+Staining$Total_HE_TissueCount_rank <- qnorm((rank(Staining$Total_HE_TissueCount, na.last = "keep") - 0.5) / sum(!is.na(Staining$Total_HE_TissueCount)))
+Staining$PlaquesizeHE_rank <- qnorm((rank(Staining$PlaquesizeHE, na.last = "keep") - 0.5) / sum(!is.na(Staining$PlaquesizeHE)))
+# EVG + plaque size of EVG measurement
+Staining$Total_EVG_Tissue_rank <- qnorm((rank(Staining$Total_EVG_Tissue, na.last = "keep") - 0.5) / sum(!is.na(Staining$Total_EVG_Tissue)))
+Staining$PlaquesizeEVG_rank <- qnorm((rank(Staining$PlaquesizeEVG, na.last = "keep") - 0.5) / sum(!is.na(Staining$PlaquesizeEVG)))
+# Glycc + plaque size of GLYCC measurement
+Staining$Total_GLYCC_Tissue_rank <- qnorm((rank(Staining$Total_GLYCC_Tissue, na.last = "keep") - 0.5) / sum(!is.na(Staining$Total_GLYCC_Tissue)))
+Staining$PlaquesizeGlycc_rank <- qnorm((rank(Staining$PlaquesizeGlycc, na.last = "keep") - 0.5) / sum(!is.na(Staining$PlaquesizeGlycc)))
+
+#write.csv2(Staining,file= paste0(OUT_loc, "/", Today, ".Staining.csv"),sep=';',row.names=TRUE, quote=FALSE)
+
+#ExpressScan_data <-ExpressScan[colnames(Staining)]
+#write.csv2(ExpressScan_data, file= paste0(OUT_loc, "/", Today, ".ExpressScandata.csv"),sep=';',row.names=TRUE, quote=FALSE)
+```
+#### Examine the clinical AE database
+We can examine the contents of the Athero-Express Biobank dataset to know what each variable is called, what class (type) it has, and what the variable description is. 
+```{r Clinicaldata: describe}
+#Clinicaldata %>% sjPlot::view_df(show.type = TRUE,
+#                         show.frq = TRUE,
+#                         show.prc = TRUE,
+#                         show.na = TRUE, 
+#                         max.len = TRUE, 
+#                         wrap.labels = 20,
+#                         verbose = FALSE, 
+#                         use.viewer = FALSE,
+#                         file = paste0(OUT_loc, "/", Today, ".Clinicaldata.dictionary.html")) 
+```
+## Fixing and creating variables
+
+We need to be very strict in defining _symptoms._ Therefore we will fix a new variable that groups _symptoms_ at inclusion.
+
+Coding of _symptoms_ is as follows:
+
+- missing	-999	
+- Asymptomatic	0	
+- TIA	1	
+- minor stroke	2	
+- Major stroke	3	
+- Amaurosis fugax	4	
+- Four vessel disease	5	
+- Vertebrobasilary TIA	7	
+- Retinal infarction	8	
+- Symptomatic, but aspecific symtoms	9
+- Contralateral symptomatic occlusion	10	
+- retinal infarction	11	
+- armclaudication due to occlusion subclavian artery, CEA needed for bypass	12	
+- retinal infarction + TIAs	13	
+- Ocular ischemic syndrome	14	
+- ischemisch glaucoom	15	
+- subclavian steal syndrome	16	
+- TGA	17
+
+We will group as follows in `Symptoms.5G`:
+
+1. Asymptomatic > 0
+2. TIA > 1, 7, 13
+3. Stroke > 2, 3
+4. Ocular > 4, 14, 15
+5. Retinal infarction > 8, 11
+6. Other > 5, 9, 10, 12, 16, 17
+
+We will also group as follows in `AsymptSympt`:
+
+1. Asymptomatic > 0
+2. TIA > 1, 7, 13 + Stroke > 2, 3 
+3. Ocular > 4, 14, 15 + Retinal infarction > 8, 11 + Other > 5, 9, 10, 12, 16, 17
+
+We will also group as follows in `AsymptSympt2G`:
+
+1. Asymptomatic > 0
+2. TIA > 1, 7, 13 + Stroke > 2, 3 Ocular > 4, 14, 15 + Retinal infarction > 8, 11 + Other > 5, 9, 10, 12, 16, 17
+
+```{r FixSymptoms, message=FALSE, warnings = FALSE, include = TRUE}
+# Fix symptoms
+attach(Clinicaldata)
+Clinicaldata$sympt[is.na(Clinicaldata$sympt)] <- -999
+# Symptoms.5G
+Clinicaldata[,"Symptoms.5G"] <- NA
+# Clinicaldata$Symptoms.5G[sympt == "NA"] <- "Asymptomatic"
+Clinicaldata$Symptoms.5G[sympt == -999] <- NA
+Clinicaldata$Symptoms.5G[sympt == 0] <- "Asymptomatic"
+Clinicaldata$Symptoms.5G[sympt == 1 | sympt == 7 | sympt == 13] <- "TIA"
+Clinicaldata$Symptoms.5G[sympt == 2 | sympt == 3] <- "Stroke"
+Clinicaldata$Symptoms.5G[sympt == 4 | sympt == 14 | sympt == 15 ] <- "Ocular"
+Clinicaldata$Symptoms.5G[sympt == 8 | sympt == 11] <- "Retinal infarction"
+Clinicaldata$Symptoms.5G[sympt == 5 | sympt == 9 | sympt == 10 | sympt == 12 | sympt == 16 | sympt == 17] <- "Other"
+
+# AsymptSympt
+Clinicaldata[,"AsymptSympt"] <- NA
+Clinicaldata$AsymptSympt[sympt == -999] <- NA
+Clinicaldata$AsymptSympt[sympt == 0] <- "Asymptomatic"
+Clinicaldata$AsymptSympt[sympt == 1 | sympt == 7 | sympt == 13 | sympt == 2 | sympt == 3] <- "Symptomatic"
+Clinicaldata$AsymptSympt[sympt == 4 | sympt == 14 | sympt == 15 | sympt == 8 | sympt == 11 | sympt == 5 | sympt == 9 | sympt == 10 | sympt == 12 | sympt == 16 | sympt == 17] <- "Ocular and others"
+
+# AsymptSympt
+Clinicaldata[,"AsymptSympt2G"] <- NA
+Clinicaldata$AsymptSympt2G[sympt == -999] <- NA
+Clinicaldata$AsymptSympt2G[sympt == 0] <- "Asymptomatic"
+Clinicaldata$AsymptSympt2G[sympt == 1 | sympt == 7 | sympt == 13 | sympt == 2 | sympt == 3 | sympt == 4 | sympt == 14 | sympt == 15 | sympt == 8 | sympt == 11 | sympt == 5 | sympt == 9 | sympt == 10 | sympt == 12 | sympt == 16 | sympt == 17] <- "Symptomatic"
+detach(Clinicaldata)
+```
+We will also fix the _diabetes_ status variable. We define diabetes as history of a diagnosis and/or use of glucose-lowering medications.
+
+```{r FixDiabetes, message=FALSE, warning=FALSE}
+# Fix diabetes
+attach(Clinicaldata)
+Clinicaldata[,"DiabetesStatus"] <- NA
+Clinicaldata$DiabetesStatus[DM.composite == -999] <- NA
+Clinicaldata$DiabetesStatus[DM.composite == 0] <- "Control (no Diabetes Dx/Med)"
+Clinicaldata$DiabetesStatus[DM.composite == 1] <- "Diabetes"
+detach(Clinicaldata)
+
+#table(Clinicaldata$DM.composite)
+#table(Clinicaldata$DiabetesStatus)
+
+#Clinicaldata.temp <- subset(Clinicaldata,  select = c("STUDY_NUMBER", "UPID", "Age", "Gender", "Hospital", "Artery_summary", "DM.composite", "DiabetesStatus"))
+#require(labelled)
+#Clinicaldata.temp$Gender <- to_factor(Clinicaldata.temp$Gender)
+#Clinicaldata.temp$Hospital <- to_factor(Clinicaldata.temp$Hospital)
+#Clinicaldata.temp$Artery_summary <- to_factor(Clinicaldata.temp$Artery_summary)
+#Clinicaldata.temp$DiabetesStatus <- to_factor(Clinicaldata.temp$DiabetesStatus) 
+#DT::datatable(Clinicaldata.temp[1:10,], caption = "Excerpt of the whole Clinicaldata.", rownames = FALSE)
+# rm(Clinicaldata.temp)
+
+```
+We will also fix the _smoking_ status variable. We are interested in whether someone never, ever or is currently (at the time of inclusion) smoking. This is based on the questionnaire. 
+
+- `diet801`: are you a smoker?
+- `diet802`: did you smoke in the past?
+
+We already have some variables indicating smoking status:
+
+- `SmokingReported`: patient has reported to smoke.
+- `SmokingYearOR`: smoking in the year of surgery?
+- `SmokerCurrent`: currently smoking?
+
+```{r FixSmoking, message=FALSE, warning=FALSE, include = TRUE}
+require(labelled)
+Clinicaldata$diet801 <- to_factor(Clinicaldata$diet801)
+Clinicaldata$diet802 <- to_factor(Clinicaldata$diet802)
+Clinicaldata$diet805 <- to_factor(Clinicaldata$diet805)
+Clinicaldata$SmokingReported <- to_factor(Clinicaldata$SmokingReported)
+Clinicaldata$SmokerCurrent <- to_factor(Clinicaldata$SmokerCurrent)
+Clinicaldata$SmokingYearOR <- to_factor(Clinicaldata$SmokingYearOR)
+
+cat("\nFixing smoking status.\n")
+attach(Clinicaldata)
+Clinicaldata[,"SmokerStatus"] <- NA
+Clinicaldata$SmokerStatus[diet802 == "don't know"] <- "Never smoked"
+Clinicaldata$SmokerStatus[diet802 == "I still smoke"] <- "Current smoker"
+Clinicaldata$SmokerStatus[SmokerCurrent == "no" & diet802 == "no"] <- "Never smoked"
+Clinicaldata$SmokerStatus[SmokerCurrent == "no" & diet802 == "yes"] <- "Ex-smoker"
+Clinicaldata$SmokerStatus[SmokerCurrent == "yes"] <- "Current smoker"
+Clinicaldata$SmokerStatus[SmokerCurrent == "no data available/missing"] <- NA
+# Clinicaldata$SmokerStatus[is.na(SmokerCurrent)] <- "Never smoked"
+detach(Clinicaldata)
+
+#cat("\n* Current smoking status.\n")
+#table(Clinicaldata$SmokerCurrent,
+#      useNA = "ifany", 
+#      dnn = c("Current smoker"))
+
+#cat("\n* Updated smoking status.\n")
+#table(Clinicaldata$SmokerStatus,
+#      useNA = "ifany", 
+#      dnn = c("Updated smoking status"))
+
+#cat("\n* Comparing to 'SmokerCurrent'.\n")
+#table(Clinicaldata$SmokerStatus, Clinicaldata$SmokerCurrent, 
+#      useNA = "ifany", 
+#      dnn = c("Updated smoking status", "Current smoker"))
+```
+We will also fix ArterySummary and make two groups we are interested in (carotid subset and femoral subset)
+```{r Fix ArterySummary, message=FALSE, warning=FALSE}
+# Fix Artery_summary (2 groups)
+Clinicaldata$Artery_summary <- to_factor(Clinicaldata$Artery_summary)
+attach(Clinicaldata)
+Clinicaldata[,"ArteryOperated"] <- NA
+Clinicaldata$ArteryOperated [Artery_summary == "carotid (left & right)"] <- "Carotid"
+Clinicaldata$ArteryOperated [Artery_summary == 'femoral/iliac (left, right or both sides)'] <- 'Femoral/iliac'
+detach(Clinicaldata)
+```
+Fixing ORdate
+```{r Fix ORdate, message=FALSE, warning=FALSE, include = TRUE}
+Clinicaldata$ORdate_epoch <- as.numeric(Clinicaldata$dateok)
+Clinicaldata$ORdate_year <- as.numeric(year(Clinicaldata$dateok))
+
+cat("Summary of 'year of surgery' in 'epoch' (); coded as `numeric()`\n")
+summary(Clinicaldata$ORdate_epoch)
+
+cat("\nSummary of 'year of surgery' in 'years' (); coded as `factor()`\n")
+table(Clinicaldata$ORdate_year)
+```
+Fixing indexsymptoms_latest_4g
+```{r Fix indexsymptoms_latest_4g, message=FALSE, warning=FALSE, include = TRUE}
+Clinicaldata$indexsymptoms_latest_4g <- factor(Clinicaldata$indexsymptoms_latest_4g)
+
+Clinicaldata[,"indexsymptoms_latest_4"] <- NA
+Clinicaldata$indexsymptoms_latest_4 [Clinicaldata$indexsymptoms_latest_4g == "0"] <- "Asymptomatic"
+Clinicaldata$indexsymptoms_latest_4 [Clinicaldata$indexsymptoms_latest_4g == '1'] <- "Ocular"
+Clinicaldata$indexsymptoms_latest_4 [Clinicaldata$indexsymptoms_latest_4g == "2"] <- "TIA"
+Clinicaldata$indexsymptoms_latest_4 [Clinicaldata$indexsymptoms_latest_4g == '3'] <- "Stroke"
+
+Clinicaldata$indexsymptoms_latest_4 <-to_factor(Clinicaldata$indexsymptoms_latest_4)
+summary(Clinicaldata$indexsymptoms_latest_4g)
+
+# Creating a asymptomatic vs symptomatic_latest variable
+Clinicaldata[,"asympt_sympt_latest"] <- NA
+Clinicaldata$asympt_sympt_latest [Clinicaldata$indexsymptoms_latest_4g == "0"] <- "Asymptomatic"
+Clinicaldata$asympt_sympt_latest [Clinicaldata$indexsymptoms_latest_4g != "0"] <- "Symptomatic"
+Clinicaldata$asympt_sympt_latest <- to_factor(Clinicaldata$asympt_sympt_latest)
+summary(Clinicaldata$asympt_sympt_latest)
+
+# Creating a asymptomatic vs ocular variable
+Clinicaldata[,"asympt_ocular_latest"] <- NA
+Clinicaldata$asympt_ocular_latest [Clinicaldata$indexsymptoms_latest_4g == "0"] <- "Asymptomatic"
+Clinicaldata$asympt_ocular_latest [Clinicaldata$indexsymptoms_latest_4g == "1"] <- "Ocular"
+Clinicaldata$asympt_ocular_latest <- to_factor(Clinicaldata$asympt_ocular_latest)
+summary(Clinicaldata$asympt_ocular_latest)
+
+# Creating a asymptomatic vs TIA variable
+Clinicaldata[,"asympt_TIA_latest"] <- NA
+Clinicaldata$asympt_TIA_latest [Clinicaldata$indexsymptoms_latest_4g == "0"] <- "Asymptomatic"
+Clinicaldata$asympt_TIA_latest [Clinicaldata$indexsymptoms_latest_4g == "2"] <- "TIA"
+Clinicaldata$asympt_TIA_latest <- to_factor(Clinicaldata$asympt_TIA_latest)
+summary(Clinicaldata$asympt_TIA_latest)
+
+# Creating a asymptomatic vs Stroke variable
+Clinicaldata[,"asympt_stroke_latest"] <- NA
+Clinicaldata$asympt_stroke_latest [Clinicaldata$indexsymptoms_latest_4g == "0"] <- "Asymptomatic"
+Clinicaldata$asympt_stroke_latest [Clinicaldata$indexsymptoms_latest_4g == "3"] <- "Stroke"
+Clinicaldata$asympt_stroke_latest <- to_factor(Clinicaldata$asympt_stroke_latest)
+summary(Clinicaldata$asympt_stroke_latest)
+
+# Creating a asymptomatic vs TIA + Stroke variable
+Clinicaldata[,"asympt_stroke_latest"] <- NA
+Clinicaldata$asympt_TIA_stroke_latest [Clinicaldata$indexsymptoms_latest_4g == "0"] <- "Asymptomatic"
+Clinicaldata$asympt_TIA_stroke_latest [Clinicaldata$indexsymptoms_latest_4g == "2" | Clinicaldata$indexsymptoms_latest_4g == "3" ] <- "Stroke"
+Clinicaldata$asympt_TIA_stroke_latest <- to_factor(Clinicaldata$asympt_TIA_stroke_latest)
+summary(Clinicaldata$asympt_TIA_stroke_latest)
+```
+
+# Athero-Express Biobank Study
+Selecting patients that we have a written informed consent form from. In addition, we are interested in patients that underwent a carotid endarterectomy.
+```{r Athero-Express Clinical database selecting the right patients, include = FALSE}
+### Artery levels
+# Clinicaldata$Artery_summary: 
+#           value                                                                                   label
+# NOT USE - 0 No artery known (yet), no surgery (patient ill, died, exited study), re-numbered to AAA
+# USE - 1                                                                  carotid (left & right)
+# NOT USE - 2                                               femoral/iliac (left, right or both sides)
+# USE - 3                                               other carotid arteries (common, external)
+# NOT USE - 4                                   carotid bypass and injury (left, right or both sides)
+# NOT USE - 5                                                         aneurysmata (carotid & femoral)
+# NOT USE - 6                                                                                   aorta
+# NOT USE - 7                                            other arteries (renal, popliteal, vertebral)
+# NOT USE - 8                        femoral bypass, angioseal and injury (left, right or both sides)
+
+### Clinicaldata$informedconsent
+#           value                                                                                           label
+# NOT USE - -999                                                                                         missing
+# NOT USE - 0                                                                                        no, died
+# USE - 1                                                                                             yes
+# USE - 2                                                             yes, health treatment when possible
+# USE - 3                                                                        yes, no health treatment
+# USE - 4                                                yes, no health treatment, no commercial business
+# NOT USE - 5                                                          yes, no tissue, no commerical business
+# NOT USE - 6                      yes, no tissue, no questionnaires, no medical info, no commercial business
+# USE - 7                             yes, no questionnaires, no health treatment, no commercial business
+# USE - 8                                          yes, no questionnaires, health treatment when possible
+# NOT USE - 9                  yes, no tissue, no questionnaires, no health treatment, no commerical business
+# USE - 10                               yes, no health treatment, no medical info, no commercial business
+# NOT USE - 11 yes, no tissue, no questionnaires, no health treatment, no medical info, no commercial business
+# USE - 12                                                     yes, no questionnaires, no health treatment
+# NOT USE - 13                                                             yes, no tissue, no health treatment
+# NOT USE - 14                                                               yes, no tissue, no questionnaires
+# NOT USE - 15                                                  yes, no tissue, health treatment when possible
+# NOT USE - 16                                                                                  yes, no tissue
+# USE - 17                                                                     yes, no commerical business
+# USE - 18                                     yes, health treatment when possible, no commercial business
+# USE - 19                                                    yes, no medical info, no commercial business
+# USE - 20                                                                          yes, no questionnaires
+# NOT USE - 21                         yes, no tissue, no questionnaires, no health treatment, no medical info
+# NOT USE - 22                  yes, no tissue, no questionnaires, no health treatment, no commercial business
+# USE - 23                                                                            yes, no medical info
+# USE - 24                                                  yes, no questionnaires, no commercial business
+# USE - 25                                    yes, no questionnaires, no health treatment, no medical info
+# USE - 26                  yes, no questionnaires, health treatment when possible, no commercial business
+# USE - 27                                                      yes,  no health treatment, no medical info
+# NOT USE - 28                                                                             no, doesn't want to
+# NOT USE - 29                                                                              no, unable to sign
+# NOT USE - 30                                                                                 no, no reaction
+# NOT USE - 31                                                                                        no, lost
+# NOT USE - 32                                                                                     no, too old
+# NOT USE - 34                                            yes, no medical info, health treatment when possible
+# NOT USE - 35                                             no (never asked for IC because there was no tissue)
+# USE - 36                    yes, no medical info, no commercial business, health treatment when possible
+# NOT USE - 37                                                                                    no, endpoint
+# USE - 38                                                         wil niets invullen, wel alles gebruiken
+# USE - 39                                           second informed concents: yes, no commercial business
+# NOT USE - 40                                                                              nooit geincludeerd
+
+cat("- sanity checking PRIOR to selection")
+library(data.table)
+ae.gender <- ifelse(Clinicaldata$Gender == 0, "Female", "Male")
+ae.hospital <- ifelse(Clinicaldata$Hospital == 1, "Antonius", "UMCU")
+table(ae.gender, ae.hospital, dnn = c("Sex", "Hospital"))
+ae.gender <- ifelse(Clinicaldata$Gender == 0, "Female", "Male")
+table(ae.gender, Clinicaldata$Artery_summary, dnn = c("Sex", "Artery"))
+table(ae.gender, Clinicaldata$informedconsent, dnn = c("Sex", "IC"))
+
+rm(ae.gender, ae.hospital)
+
+
+# Changing the name of one of the Hypertension variables
+names(Clinicaldata)[names(Clinicaldata) == "Hypertension1"] <- "Hypertension.selfreport"
+
+# Changing the class of variables to numeric and factors
+numeric <- c("Age", "diastoli", "systolic", "GFR_MDRD", "BMI","ORyear")
+categorical <- c("Gender", "Hospital", "DiabetesStatus", "SmokerCurrent", "Hypertension.selfreport", "risk614","Med.Statin.LLD", "Hypertension.drugs","Med.all.antiplatelet", "Med.anticoagulants", "CAD_history", "PAOD", "Peripheral.interv", "StrokeTIA_history", "Stenosis_ipsilateral", "stenosis_con_bin","Symptoms.4g","Symptoms.5G","AsymptSympt2G","indexsymptoms_latest_4g","restenos","ArteryOperated","YearOR_per2years","asympt_sympt_latest","IPH.bin")
+
+Clinicaldata[numeric] <- lapply(Clinicaldata[,numeric], as.numeric)
+Clinicaldata[categorical] <- lapply(Clinicaldata[categorical], factor)
+
+# Keeping the value labels of informed consent and Artery_summary is vital for the code below
+Clinicaldata$informedconsent <- to_factor(Clinicaldata$informedconsent)
+Clinicaldata$Artery_summary <- to_factor(Clinicaldata$Artery_summary)
+summary(Clinicaldata$Artery_summary)
+
+# Only selecting patients with a written informed consent.
+Clinicaldata.IC <- subset(Clinicaldata,
+                      (informedconsent != "missing" & # we are really strict in selecting based on 'informed consent'!
+                       informedconsent != "no, died" &
+                       informedconsent != "yes, no tissue, no commerical business" &
+                       informedconsent != "yes, no tissue, no questionnaires, no medical info, no commercial business" &
+                       informedconsent != "yes, no tissue, no questionnaires, no health treatment, no commerical business" &
+                       informedconsent != "yes, no tissue, no questionnaires, no health treatment, no medical info, no commercial business" &
+                       informedconsent != "yes, no tissue, no health treatment" &
+                       informedconsent != "yes, no tissue, no questionnaires" &
+                       informedconsent != "yes, no tissue, health treatment when possible" &
+                       informedconsent != "yes, no tissue" &
+                       informedconsent != "yes, no tissue, no questionnaires, no health treatment, no medical info" &
+                       informedconsent != "yes, no tissue, no questionnaires, no health treatment, no commercial business" &
+                       informedconsent != "no, doesn't want to" &
+                       informedconsent != "no, unable to sign" &
+                       informedconsent != "no, no reaction" &
+                       informedconsent != "no, lost" &
+                       informedconsent != "no, too old" &
+                       informedconsent != "yes, no medical info, health treatment when possible" &
+                       informedconsent != "no (never asked for IC because there was no tissue)" &
+                       informedconsent != "no, endpoint" &
+                       informedconsent != "nooit geincludeerd"))
+
+# Only selecting patients that received a carotid endarterectomy
+Clinicaldata.CEA <- subset(Clinicaldata.IC,(Artery_summary == "carotid (left & right)" | Artery_summary == "other carotid arteries (common, external)")) # Only select "carotid (left & right)" and "other carotid arteries (common, external)"
+
+# NOTE: sometimes Artery_summary doesn't use the labels but only the value's, in that case use the code below. I did not identify the cause for this.
+#Clinicaldata.CEA <- subset(Clinicaldata.IC,(Artery_summary == "1" | Artery_summary == "3")) # Only select "carotid (left & right)" and "other carotid arteries (common, external)"
+```
+## Merging the Clinicaldata frame with the Staining data
+```{r Athero-Express Clinical database merge with Staining, include = FALSE}
+ExpressScan <- merge(Staining,Clinicaldata.CEA, by= "STUDY_NUMBER", all=FALSE)
+#write.csv2(ExpressScan,file= paste0(OUT_loc, "/", Today, "ExpressScan.csv"), sep=';', row.names=TRUE, quote=FALSE)
+colnames(Staining)
+#ExpressScan_data <-ExpressScan[colnames(Staining)]
+#write.csv2(ExpressScan_data, file= paste0(OUT_loc, "/", Today, ".ExpressScandata.csv"),sep=';',row.names=TRUE, quote=FALSE)
+```
+## Baseline characteristics
+We are interested in the following variables at baseline.
+
+- Age (years) [`Age`]
+- Sex (male vs. female) [`Gender`]
+- Presence of hypertension (N, %) [`Hypertension.selfreport`]
+- Systolic blood pressure (mmHg) [`systolic`]
+- Diastolic blood pressure (mmHg) [`diastoli`]
+- Presence of diabetes mellitus at baseline (defined either as a history of diabetes and/or administration of glucose lowering medication) [`DiabetesStatus`]
+- Total cholesterol levels (mg/dL) [`TC_final`]
+- LDL cholesterol levels (mg/dL) [`LDL_final`]
+- HDL cholesterol levels (mg/dL) [`HDL_final`]
+- Triglyceride levels (mg/dL) [`TG_final`]
+- Hypercholesterolemia (N, %) [`risk614``]
+- Use of statins or other lipid-lowering drugs (N, %) [`Med.Statin.LLD`]
+- Use of antihypertensive drugs (N, %) [`Hypertension.drugs`]
+- Use of antiplatelet drugs (N, %) [`Med.all.antiplatelet`]
+- Use of anticoagulant drugs (N, %) [`Med.anticoagulants`]
+- BMI (kg/m²) (continuous) [`BMI`]
+- Smoking (current, ex-, never) (N, %) [`SmokerStatus`]
+- History of CAD (N, %) [`CAD_history`]
+- History of TIA/Stroke (N, %) [`StrokeTIA_history`]
+- History of PAOD (N, %) [`PAOD`]
+- History of Peripheral interventions (N, %) [`Peripheral.interv`]
+- Stenosis ipsilateral (N,%) [`Stenosis_ipsilateral`]
+- Stenosis contralateral (N,%) [`stenosis_con_bin`]
+- eGFR (mL/min/1.73 m²) [`GFR_MDRD`]
+- Clinical status before surgery (in terms of presence of symptoms), latest symptoms before surgery, note that symptoms >180 days before surgery is classified as asymptomatic [`indexsymptoms_latest_4g`]
+  - Asymptomatic
+  - Amaurosis fugax
+  - TIA
+  - Stroke
+  - Other (very heterogeneous group) (use [`indexsymptoms_latest_4`] for only four groups)
+- Clinical status before surgery with only two groups (symptomatic and asymptomatic) [`asympt_sympt_latest`]
+```{r}
+cat("CREATE BASELINE TABLE\n")
+# Baseline table variables
+basetable_vars = c("Hospital", "Age", "Gender","Hypertension.selfreport","systolic","diastoli","DiabetesStatus","TC_final", "LDL_final", "HDL_final", "TG_final","risk614","Med.Statin.LLD","Hypertension.drugs","Med.all.antiplatelet","Med.anticoagulants","BMI","GFR_MDRD","SmokerStatus","CAD_history","StrokeTIA_history","PAOD","Peripheral.interv","indexsymptoms_latest_4","indexsymptoms_latest_4g","asympt_sympt_latest","AsymptSympt2G","Stenosis_ipsilateral","stenosis_con_bin")
+
+basetable_bin = c("Hospital", "Gender","Hypertension.selfreport","DiabetesStatus","risk614","Med.Statin.LLD","Hypertension.drugs","Med.all.antiplatelet","Med.anticoagulants","SmokerStatus","CAD_history","StrokeTIA_history","PAOD","Peripheral.interv","indexsymptoms_latest_4","indexsymptoms_latest_4g","asympt_sympt_latest","AsymptSympt2G","Stenosis_ipsilateral","stenosis_con_bin")
+# basetable_bin
+
+basetable_con = basetable_vars[!basetable_vars %in% basetable_bin]
+# basetable_con
+```
+
+### All patients
+Showing the baseline table of the CEA patients with at least one _plaquecharacteristic_ measured with the SlideToolkit method from the Athero-Express Biobank included in this study.
+
+```{r Baseline Clinicaldata: Visualize Clinicaldata}
+# Create baseline tables
+# http://rstudio-pubs-static.s3.amazonaws.com/13321_da314633db924dc78986a850813a50d5.html
+ExpressScan.tableOne = print(CreateTableOne(vars = basetable_vars, 
+                                         # factorVars = basetable_bin,
+                                         # strata = "Gender",
+                                         data = ExpressScan, includeNA = FALSE), 
+                          nonnormal = c("TC_final", "LDL_final", "HDL_final", "TG_final","BMI"), missing = TRUE,
+                          quote = FALSE, noSpaces = FALSE, showAllLevels = TRUE, explain = TRUE, 
+                          format = "fp", 
+                          contDigits = 2)[,1:3]
+
+# Stratified on Gender
+ExpressScan.Gender.tableOne = print(CreateTableOne(vars = basetable_vars, 
+                                         # factorVars = basetable_bin,
+                                         strata = "Gender",
+                                         data = ExpressScan, includeNA = FALSE), 
+                          nonnormal = c("TC_final", "LDL_final", "HDL_final", "TG_final","BMI"), missing = TRUE,
+                          quote = FALSE, noSpaces = FALSE, showAllLevels = TRUE, explain = TRUE, 
+                          format = "fp", 
+                          contDigits = 2)[,1:3]
+```
+Plaque characteristic tables stratified for Gender.
+```{r Plaque characteristics data: visualize the SlideToolkit measurement}
+plaque_vars = c("Total_CD34_TissueCount_rank","Total_CD66b_TissueCount_rank","Total_CD68_TissueCount_rank","Total_SMA_TissueCount_rank","Total_HE_TissueCount_rank","Total_EVG_Tissue_rank","Total_GLYCC_Tissue_rank")
+
+# Stratified on Gender
+ExpressScan.Plaque.Gender.tableOne = print(CreateTableOne(vars = plaque_vars, 
+                                         # factorVars = basetable_bin,
+                                         strata = "Gender",
+                                         data = ExpressScan, includeNA = FALSE), 
+                          nonnormal = c(), missing = TRUE,
+                          quote = FALSE, noSpaces = FALSE, showAllLevels = TRUE, explain = TRUE, 
+                          format = "fp", 
+                          contDigits = 2)[,1:3]
+```
+Writing the baseline + plaque tables to Excel format.
+```{r Baseline ExpressScan: write}
+# Write basetable
+#require(openxlsx)
+#write.xlsx(file = paste0(BASELINE_loc, "/",Today,".",PROJECTNAME,".ExpressScan.BaselineTable.xlsx"),
+#           ExpressScan.tableOne, 
+#           row.names = TRUE, 
+#           col.names = TRUE, 
+#           sheetName = "ExpressScan_Baseline")
+
+#write.xlsx(file = paste0(BASELINE_loc, "/",Today,".",PROJECTNAME,".ExpressScan.BaselineTable.Gender.xlsx"),
+#           ExpressScan.Plaque.Gender.tableOne, 
+#           row.names = TRUE, 
+#           col.names = TRUE, 
+#           sheetName = "ExpressScan_Baseline")
+
+
+# Write plaque characteristics tables
+#write.xlsx(file = paste0(OUT_loc, "/",Today,".",PROJECTNAME,".ExpressScan.PlaqueTable.Gender.xlsx"),
+#           ExpressScan.Plaque.Gender.tableOne, 
+#           row.names = TRUE, 
+#           col.names = TRUE, 
+#           sheetName = "ExpressScan_Plaque_Gender")
+```
+Checking the distribution of the continuous baseline variables and if needed transform the data so it has a more normal distribution
+```{r Checking the distribution continuous baseline variables, warnings = FALSE, include = FALSE}
+attach(ExpressScan)
+# Age (years)
+# hist(Age) --> normally distributed
+# ORdate_epoch 
+#hist(ORdate_epoch) --> normally distributed
+# SBP (mmHg)
+#hist(systolic) --> normally distributed
+# DBP (mmHg)
+#hist(diastoli) --> normally distributed
+
+# TC_final (mg/dL) --> right skewed, normal after log transforming
+hist(TC_final)
+min_TC_final <- min(ExpressScan$TC_final, na.rm = TRUE)
+ExpressScan$TC_final_LN <- log(ExpressScan$TC_final + min_TC_final)
+hist(ExpressScan$TC_final_LN)
+
+# LDL_final (mg/dL) --> right skewed, normal after log transforming
+hist(LDL_final)
+min_LDL_final <- min(ExpressScan$LDL_final, na.rm = TRUE)
+ExpressScan$LDL_final_LN <- log(ExpressScan$LDL_final + min_LDL_final)
+hist(ExpressScan$LDL_final_LN)
+
+# HDL_final (mg/dL) --> right skewed, normal after log transforming
+hist(HDL_final)
+min_HDL_final <- min(ExpressScan$HDL_final, na.rm = TRUE)
+ExpressScan$HDL_final_LN <- log(ExpressScan$HDL_final + min_HDL_final)
+hist(ExpressScan$HDL_final_LN)
+
+# TG_final (mg/dL) --> right skewed, normal after log transforming
+hist(TG_final)
+min_TG_final <- min(ExpressScan$TG_final, na.rm = TRUE)
+ExpressScan$TG_final_LN <- log(ExpressScan$TG_final + min_TG_final)
+hist(ExpressScan$TG_final_LN)
+
+# BMI (kg/m²) --> right skewed, normal after log transforming
+hist(BMI)
+min_BMI <- min(ExpressScan$BMI, na.rm = TRUE)
+ExpressScan$BMI_LN <- log(ExpressScan$BMI + min_BMI)
+hist(ExpressScan$BMI_LN)
+
+# eGFR (mL/min/1.73 m²)
+#hist(GFR_MDRD) --> normally distributed
+detach(ExpressScan)
+```
+### Figure 1b: Calculating the sample size per plaque characteristic
+```{r Figure 1: total number of samples per plaque characteristic and stratified for Gender}
+# Total number in Clinicaldata set (Version March 2020)
+nrow(Clinicaldata.IC) #3628
+
+# Total number of CEA in Clinicaldata set (Version March 2020)
+nrow(Clinicaldata.CEA) #2432
+margin.table(table(Clinicaldata.CEA$Age, Clinicaldata.CEA$Gender),2) # 1690 male, 742 female
+
+# Total sample size of ExpressScan
+nrow(ExpressScan) # 1971
+margin.table(table(ExpressScan$Age, ExpressScan$Gender),2) # 1364 male, 607 female
+
+# Sample size per plaque characteristic 
+margin.table(table(ExpressScan$Total_CD34_TissueCount_rank, ExpressScan$Gender),2) #Total CD34 measurements: 1374,  951 male, 423 female
+margin.table(table(ExpressScan$Total_CD66b_TissueCount_rank, ExpressScan$Gender),2) #Total CD66b measurements: 1063, 741 male, 322 female
+margin.table(table(ExpressScan$Total_CD68_TissueCount_rank, ExpressScan$Gender),2) #Total CD68 measurements: 1856, 1293 male, 563 female
+margin.table(table(ExpressScan$Total_SMA_TissueCount_rank, ExpressScan$Gender),2) #Total SMA measurements: 1827, 1259 male, 568 female
+margin.table(table(ExpressScan$Total_HE_TissueCount_rank, ExpressScan$Gender),2) #Total HE measurements: 1558, 1083 male, 475 female
+margin.table(table(ExpressScan$Total_EVG_Tissue_rank, ExpressScan$Gender),2) #Total EVG measurements: 1759, 1218 male, 541 female
+margin.table(table(ExpressScan$Total_GLYCC_Tissue_rank, ExpressScan$Gender),2) #Total Glycophorin C measurements: 1369, 959 male, 410 female
+```
+
+### Clinical status before surgery, asymptomatic versus symptomatic - full cohort
+For the dependent variable in the logistic regression models we use _asympt_sympt_latest_.
+
+Model 1: Univariable logistic models per plaque characteristic
+Model 2: Multivariable logistic models per plaque characteristic, we correct for _Plaquesize_
+Model 3: Multivariable logistic models per plaque characteristic, we correct for _Plaquesize_ and _confounders_
+
+## Model 1 - full cohort
+We do not correct for any covariables.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+```{r Model1: univariable logistic models, index symptoms asymptomatic versus symptomatic, include=TRUE, paged.print=TRUE}
+# CD34
+CD34 <- glm(asympt_sympt_latest~Total_CD34_TissueCount_rank, data=ExpressScan, family = binomial)
+summary(CD34)
+exp(coefficients(CD34))
+exp(confint(CD34))
+#CD66b
+CD66b <- glm(asympt_sympt_latest~Total_CD66b_TissueCount_rank, data=ExpressScan, family = binomial)
+summary(CD66b)
+exp(coefficients(CD66b))
+exp(confint(CD66b))
+#CD68
+CD68 <- glm(asympt_sympt_latest~Total_CD68_TissueCount_rank, data=ExpressScan, family = binomial)
+summary(CD68)
+exp(coefficients(CD68))
+exp(confint(CD68))
+#SMA
+SMA <- glm(asympt_sympt_latest~Total_SMA_TissueCount_rank, data=ExpressScan, family = binomial)
+summary(SMA)
+exp(coefficients(SMA))
+exp(confint(SMA))
+#HE
+HE <- glm(asympt_sympt_latest~Total_HE_TissueCount_rank, data=ExpressScan, family = binomial)
+summary(HE)
+exp(coefficients(HE))
+exp(confint(HE))
+#EVG
+EVG <- glm(asympt_sympt_latest~Total_EVG_Tissue_rank, data=ExpressScan, family = binomial)
+summary(EVG)
+exp(coefficients(EVG))
+exp(confint(EVG))
+#Glycc
+GLYCC <- glm(asympt_sympt_latest~Total_GLYCC_Tissue_rank, data=ExpressScan, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+```
+## Model 2 - full cohort
+Multivariable logistic models per plaque characteristic, we correct for _Plaquesize_.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+```{r Model 2: multivariable logistic models, index symptoms asymptomatic versus symptomatic, include=TRUE, paged.print=TRUE}
+# CD34
+CD34 <- glm(asympt_sympt_latest~Total_CD34_TissueCount_rank + PlaquesizeCD34_rank, data=ExpressScan, family = binomial)
+summary(CD34)
+exp(coefficients(CD34))
+exp(confint(CD34))
+#CD66b
+CD66b <- glm(asympt_sympt_latest~Total_CD66b_TissueCount_rank + PlaquesizeCD66b_rank, data=ExpressScan, family = binomial)
+summary(CD66b)
+exp(coefficients(CD66b))
+exp(confint(CD66b))
+#CD68
+CD68 <- glm(asympt_sympt_latest~Total_CD68_TissueCount_rank + PlaquesizeCD68_rank, data=ExpressScan, family = binomial)
+summary(CD68)
+exp(coefficients(CD68))
+exp(confint(CD68))
+#SMA
+SMA <- glm(asympt_sympt_latest~Total_SMA_TissueCount_rank + PlaquesizeSMA_rank, data=ExpressScan, family = binomial)
+summary(SMA)
+exp(coefficients(SMA))
+exp(confint(SMA))
+#HE
+HE <- glm(asympt_sympt_latest~Total_HE_TissueCount_rank + PlaquesizeHE_rank, data=ExpressScan, family = binomial)
+summary(HE)
+exp(coefficients(HE))
+exp(confint(HE))
+#EVG
+EVG <- glm(asympt_sympt_latest~Total_EVG_Tissue_rank +  PlaquesizeEVG_rank, data=ExpressScan, family = binomial)
+summary(EVG)
+exp(coefficients(EVG))
+exp(confint(EVG))
+#Glycc
+GLYCC <- glm(asympt_sympt_latest~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank, data=ExpressScan, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+```
+## Model 3 - full cohort
+Multivariable logistic models per plaque characteristic, we correct for _Plaquesize_ and _confounders_.
+We first have to know which baseline characteristics are confounders in the association between independent plaque characteristics and the dependent outcome variable _asympt_sympt_latest_.
+We will make separate univariable models between baseline characteristics and the dependent outcome variable _asympt_sympt_latest_, when there is a (weak) association with a p-value of <0.1, the association(s) between the baseline characteristic and the plaque characteristic variable(s) will be tested. If there is a (weak) association between the plaque characteristic variable and baseline variable than this baseline variable will be classified as a confounder in the association between the plaque characteristic and dependent outcome variable _asympt_sympt_latest_, and will therefore be included in the final multivariable model.
+```{r Preparation for model 3 logistic regression, _asympt_sympt_latest_, full cohort}
+vars <-c("Hospital","ORdate_epoch", "Age", "Gender","Hypertension.selfreport","systolic","diastoli","DiabetesStatus","TC_final_LN", "LDL_final", "HDL_final_LN", "TG_final_LN","risk614","Med.Statin.LLD","Hypertension.drugs","Med.all.antiplatelet","Med.anticoagulants","BMI_LN","GFR_MDRD","SmokerStatus","CAD_history","StrokeTIA_history","PAOD","Peripheral.interv","Stenosis_ipsilateral","stenosis_con_bin", "SourceCD34", "SourceCD68","SourceSMA","SourceHE","SourceEVG")
+
+preparation <- lapply(vars, function(x) {glm(substitute(asympt_sympt_latest ~ i, list(i = as.name(x))), family=binomial, data = ExpressScan)})
+#lapply(preparation,summary) # full summary
+#lapply(preparation, coefficients) # only coefficients
+sapply(preparation, function(f) summary(f)$coefficients[,4]) # only p-values, this is what we are interested in since this will determine the next step in the analysis.
+
+# Based on the strong association between and the description of both variables StrokeTIA_history (history of TIA or Stroke prior to surgery) and asympt_sympt_latest(Asymptomatic or symptomatic in <183 days before surgery), we conclude that StrokeTIA_history although one of the baseline characteristics will not be added in the final models.
+```
+## Model 3 - full cohort 
+Multivariable logistic models per plaque characteristic, where we correct for _Plaquesize_ and _confounders_.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+Based on the outcome of the preparation, we no can select the confounders for every plaque characteristic
+CD34: _PlaquesizeCD34_rank_, _ORdate_epoch_, _Gender_, _BMI_LN_, _Peripheral.interv_, _SourceCD34_
+CD66b: _PlaquesizeCD66b_rank_, _Age_, _Gender_, _stenosis_con_bin_
+CD68: _PlaquesizeCD68_rank_, _ORdate_epoch_, _Age_, _Gender_, _SmokerStatus_, _BMI_LN_, _CAD_history_, _SourceCD68_
+SMA: _PlaquesizeSMA_rank_, _ORdate_epoch_, _Gender_, _BMI_LN_, _Hypertension.drugs_, _Peripheral.interv_, _SourceSMA_
+HE: _PlaquesizeHE_rank_, _ORdate_epoch_, _Gender_, _Hypertension.drugs_, _stenosis_con_bin_, _SourceHE_
+EVG: _PlaquesizeEVG_rank_, _Gender_, _SmokerStatus_, _BMI_LN_, _GFR_MDRD_, _Hypertension.drugs_, _Peripheral.interv_, _SourceEVG_
+GLYCC: _PlaquesizeGlycc_rank_, _ORdate_epoch_, _Gender_, _SmokerStatus_, _Hypertension.drugs_, _CAD_history_
+```{r Model 3: multivariable logistic models, index symptoms asymptomatic versus symptomatic, include=TRUE, paged.print=TRUE}
+# CD34
+CD34 <- glm(asympt_sympt_latest~Total_CD34_TissueCount_rank + PlaquesizeCD34_rank + ORdate_epoch + Gender + BMI_LN + Peripheral.interv +SourceCD34, data=ExpressScan, family = binomial)
+summary(CD34)
+exp(coefficients(CD34))
+exp(confint(CD34))
+#CD66b
+CD66b <- glm(asympt_sympt_latest~Total_CD66b_TissueCount_rank + PlaquesizeCD66b_rank + Age + Gender + stenosis_con_bin, data=ExpressScan, family = binomial)
+summary(CD66b)
+exp(coefficients(CD66b))
+exp(confint(CD66b))
+#CD68
+CD68 <- glm(asympt_sympt_latest~Total_CD68_TissueCount_rank + PlaquesizeCD68_rank + ORdate_epoch + Age + Gender + SmokerStatus + BMI_LN + CAD_history + SourceCD68, data=ExpressScan, family = binomial)
+summary(CD68)
+exp(coefficients(CD68))
+exp(confint(CD68))
+#SMA
+SMA <- glm(asympt_sympt_latest~Total_SMA_TissueCount_rank + PlaquesizeSMA_rank + ORdate_epoch + Gender + BMI_LN + Hypertension.drugs + Peripheral.interv + SourceSMA, data=ExpressScan, family = binomial)
+summary(SMA)
+exp(coefficients(SMA))
+exp(confint(SMA))
+#HE
+HE <- glm(asympt_sympt_latest~Total_HE_TissueCount_rank + PlaquesizeHE_rank + ORdate_epoch + Gender + Hypertension.drugs + stenosis_con_bin + SourceHE, data=ExpressScan, family = binomial)
+summary(HE)
+exp(coefficients(HE))
+exp(confint(HE))
+#EVG
+EVG <- glm(asympt_sympt_latest~Total_EVG_Tissue_rank +  PlaquesizeEVG_rank + Gender + SmokerStatus + BMI_LN + GFR_MDRD + Hypertension.drugs + Peripheral.interv + SourceEVG, data=ExpressScan, family = binomial)
+summary(EVG)
+exp(coefficients(EVG))
+exp(confint(EVG))
+#Glycc
+GLYCC <- glm(asympt_sympt_latest~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank + ORdate_epoch + Gender + SmokerStatus + Hypertension.drugs + CAD_history, data=ExpressScan, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+```
+
+### MACE Models - full cohort
+
+For the MACE models we use a similar approach than for the clinical status before surgery logistic regressions, namely:
+Model 1: Univariable cox regression models per plaque characteristic
+Model 2: Multivariable cox regression models per plaque characteristic, we correct for _Plaquesize_
+Model 3: Multivariable cox regression models per plaque characteristic, we correct for _Plaquesize_ and _confounders_
+
+## Model 1 - full cohort
+In this model we do not correct for any variables.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+```{r Model 1: Univariable MACE models, full cohort, warnings = FALSE, include = TRUE}
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD34_TissueCount_rank,data=ExpressScan)) #CD34
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD66b_TissueCount_rank,data=ExpressScan)) #CD66b
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD68_TissueCount_rank,data=ExpressScan)) #CD68
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_SMA_TissueCount_rank,data=ExpressScan)) #SMA
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_HE_TissueCount_rank,data=ExpressScan)) #HE
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_EVG_Tissue_rank,data=ExpressScan)) #EVG
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank,data=ExpressScan)) #GLYCC
+```
+## Model 2 - full cohort
+In this model we correct for _Plaquesize_.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+```{r Model 2: MV MACE models, incl plaquesize, full cohort warnings = FALSE, include = TRUE}
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD34_TissueCount_rank+PlaquesizeCD34_rank,data=ExpressScan)) #CD34
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD66b_TissueCount_rank+PlaquesizeCD66b_rank,data=ExpressScan)) #CD66b
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD68_TissueCount_rank+PlaquesizeCD68_rank,data=ExpressScan)) #CD68
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_SMA_TissueCount_rank+PlaquesizeSMA_rank,data=ExpressScan)) #SMA
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_HE_TissueCount_rank+PlaquesizeHE_rank,data=ExpressScan)) #HE
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_EVG_Tissue_rank+PlaquesizeEVG_rank,data=ExpressScan)) #EVG
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+PlaquesizeGlycc_rank,data=ExpressScan)) #GLYCC
+
+ExpressScan$ep_com_t_3years
+ExpressScan$epcom.3years
+```
+### Preparation for Model 3 - full cohort
+Determining which baseline variables are associated with the plaque characteristics
+```{r Association baseline variables, preparation}
+continuous_variables = c("Age", "diastoli", "systolic", "GFR_MDRD","ORdate_epoch","TC_final_LN", "LDL_final_LN", "HDL_final_LN", "TG_final_LN", "BMI_LN")
+categorical_variables <- c("Gender", "Hospital", "DiabetesStatus", "SmokerCurrent", "Hypertension.selfreport", "risk614","Med.Statin.LLD", "Hypertension.drugs","Med.all.antiplatelet", "Med.anticoagulants", "CAD_history", "PAOD", "Peripheral.interv", "StrokeTIA_history", "Stenosis_ipsilateral", "stenosis_con_bin","indexsymptoms_latest_4g")
+plaque_vars <-c("Total_CD34_TissueCount_rank","Total_CD66b_TissueCount_rank","Total_CD68_TissueCount_rank","Total_SMA_TissueCount_rank","Total_HE_TissueCount_rank","Total_EVG_Tissue_rank","Total_GLYCC_Tissue_rank")
+
+p.value <-c("p.value")
+estimate <-c("estimate")
+```
+Continuous variables
+```{r Continuous variables, warnings = FALSE, include = TRUE}
+plaque_vars <-c("Total_CD34_TissueCount_rank","Total_CD66b_TissueCount_rank","Total_CD68_TissueCount_rank","Total_SMA_TissueCount_rank","Total_HE_TissueCount_rank","Total_EVG_Tissue_rank","Total_GLYCC_Tissue_rank")
+
+### ORdate_epoch
+Association_ORdate_epoch <-lapply(ExpressScan[plaque_vars], function (x) cor.test(ExpressScan$ORdate_epoch, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_ORdate_epoch, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_ORdate_epoch, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# Use this to see the variable names of the continuous variables while extracting the Spearman Rho's and P-value's
+#pvalue_markers <- unlist(lapply(Association_ORdate_epoch, function(e) {unlist(e[p.value])}))
+#estimate_markers <- unlist(lapply(Association_ORdate_epoch, function(e) {unlist(e[estimate])}))
+#pvalue_markers
+#estimate_markers
+
+### Age
+Association_Age <-lapply(ExpressScan[plaque_vars], function (x) cor.test(ExpressScan$Age, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_Age, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_Age, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### systolic
+Association_systolic <-lapply(ExpressScan[plaque_vars], function (x) cor.test(ExpressScan$systolic, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_systolic, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_systolic, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### diastoli
+Association_diastoli <-lapply(ExpressScan[plaque_vars], function (x) cor.test(ExpressScan$diastoli, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_diastoli, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_diastoli, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### GFR_MDRD
+Association_GFR_MDRD <-lapply(ExpressScan[plaque_vars], function (x) cor.test(ExpressScan$GFR_MDRD, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_GFR_MDRD, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_GFR_MDRD, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# TC_final_LN
+Association_TC_final_LN <-lapply(ExpressScan[plaque_vars], function (x) cor.test(ExpressScan$TC_final_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_TC_final_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_TC_final_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# LDL_final_LN
+Association_LDL_final_LN <-lapply(ExpressScan[plaque_vars], function (x) cor.test(ExpressScan$LDL_final_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_LDL_final_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_LDL_final_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# HDL_final_LN
+Association_HDL_final_LN <-lapply(ExpressScan[plaque_vars], function (x) cor.test(ExpressScan$HDL_final_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_HDL_final_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_HDL_final_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# TG_final_LN
+Association_TG_final_LN <-lapply(ExpressScan[plaque_vars], function (x) cor.test(ExpressScan$TG_final_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_TG_final_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_TG_final_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# BMI_LN
+Association_BMI_LN <-lapply(ExpressScan[plaque_vars], function (x) cor.test(ExpressScan$BMI_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_BMI_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_BMI_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# I still need to write a better code to extract the variable names, Spearman Rho's and p-values and put these in a dataframe/list which I can save as a .csv or .xlsx file, but this works for now.
+```
+Categorical variables
+```{r Categorical variables, warnings = FALSE, include = TRUE}
+dichotomous_vars <- c("Hospital","Gender","Hypertension.selfreport","risk614","DiabetesStatus","Med.Statin.LLD","Hypertension.drugs","Med.all.antiplatelet","Med.anticoagulants","CAD_history","PAOD","Peripheral.interv","StrokeTIA_history","stenosis_con_bin")
+group_vars <- c("Stenosis_ipsilateral","SmokerStatus")
+
+# Categorical variables: CD34, t-tests + anova for stenosis ipsilateral
+CD34_dich<-lapply(ExpressScan[dichotomous_vars], function(x) t.test(ExpressScan$Total_CD34_TissueCount_rank~x))
+result <- do.call(rbind, lapply(CD34_dich,`[[`, "estimate"))
+pval <- sapply(CD34_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+CD34_dich
+summary(aov(ExpressScan$Total_CD34_TissueCount_rank~ExpressScan$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan$Total_CD34_TissueCount_rank~ExpressScan$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan$Total_CD34_TissueCount_rank~ExpressScan$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan$Total_CD34_TissueCount_rank~ExpressScan$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: CD66b, t-tests + anova for stenosis ipsilateral
+CD66b_dich<-lapply(ExpressScan[dichotomous_vars], function(x) t.test(ExpressScan$Total_CD66b_TissueCount_rank~x))
+result <- do.call(rbind, lapply(CD66b_dich,`[[`, "estimate"))
+pval <- sapply(CD66b_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,3)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan$Total_CD66b_TissueCount_rank~ExpressScan$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan$Total_CD66b_TissueCount_rank~ExpressScan$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan$Total_CD66b_TissueCount_rank~ExpressScan$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan$Total_CD66b_TissueCount_rank~ExpressScan$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: CD68, t-tests + anova for stenosis ipsilateral
+CD68_dich<-lapply(ExpressScan[dichotomous_vars], function(x) t.test(ExpressScan$Total_CD68_TissueCount_rank~x))
+result <- do.call(rbind, lapply(CD68_dich,`[[`, "estimate"))
+pval <- sapply(CD68_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,3)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan$Total_CD68_TissueCount_rank~ExpressScan$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan$Total_CD68_TissueCount_rank~ExpressScan$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan$Total_CD68_TissueCount_rank~ExpressScan$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan$Total_CD68_TissueCount_rank~ExpressScan$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: SMA, t-tests + anova for stenosis ipsilateral
+SMA_dich<-lapply(ExpressScan[dichotomous_vars], function(x) t.test(ExpressScan$Total_SMA_TissueCount_rank~x))
+result <- do.call(rbind, lapply(SMA_dich,`[[`, "estimate"))
+pval <- sapply(SMA_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,3)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan$Total_SMA_TissueCount_rank~ExpressScan$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan$Total_SMA_TissueCount_rank~ExpressScan$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan$Total_SMA_TissueCount_rank~ExpressScan$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan$Total_SMA_TissueCount_rank~ExpressScan$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: HE, t-tests + anova for stenosis ipsilateral
+HE_dich<-lapply(ExpressScan[dichotomous_vars], function(x) t.test(ExpressScan$Total_HE_TissueCount_rank~x))
+result <- do.call(rbind, lapply(HE_dich,`[[`, "estimate"))
+pval <- sapply(HE_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,3)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan$Total_HE_TissueCount_rank~ExpressScan$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan$Total_HE_TissueCount_rank~ExpressScan$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan$Total_HE_TissueCount_rank~ExpressScan$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan$Total_HE_TissueCount_rank~ExpressScan$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: EVG, t-tests + anova for stenosis ipsilateral
+EVG_dich<-lapply(ExpressScan[dichotomous_vars], function(x) t.test(ExpressScan$Total_EVG_Tissue_rank~x))
+result <- do.call(rbind, lapply(EVG_dich,`[[`, "estimate"))
+pval <- sapply(EVG_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,3)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan$Total_EVG_Tissue_rank~ExpressScan$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan$Total_EVG_Tissue_rank~ExpressScan$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan$Total_EVG_Tissue_rank~ExpressScan$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan$Total_EVG_Tissue_rank~ExpressScan$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: GLYCC, t-tests + anova for stenosis ipsilateral
+GLYCC_dich<-lapply(ExpressScan[dichotomous_vars], function(x) t.test(ExpressScan$Total_GLYCC_Tissue_rank~x))
+result <- do.call(rbind, lapply(GLYCC_dich,`[[`, "estimate"))
+pval <- sapply(GLYCC_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,3)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan$Total_GLYCC_Tissue_rank~ExpressScan$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan$Total_GLYCC_Tissue_rank~ExpressScan$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan$Total_GLYCC_Tissue_rank~ExpressScan$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan$Total_GLYCC_Tissue_rank~ExpressScan$SmokerStatus), "means") #means SmokerStatus
+
+# I still need to write a better code to extract the variable names and p-values and put these in a dataframe/list which I can save as a .csv or .xlsx file  but this works for now.
+```
+Association of baseline characteristics with outcome (MAjor Cardiovascular Events (MACE) during follow-up)
+```{r Identifying possible confounders, warnings = FALSE, include = TRUE}
+# Creating univariate formulas
+univ_formulas <- sapply(c("Hospital","ORdate_epoch", "Age", "Gender","Hypertension.selfreport","systolic","diastoli","DiabetesStatus","TC_final_LN", "LDL_final", "HDL_final_LN", "TG_final_LN","risk614","Med.Statin.LLD","Hypertension.drugs","Med.all.antiplatelet","Med.anticoagulants","BMI_LN","GFR_MDRD","SmokerStatus","CAD_history","StrokeTIA_history","PAOD","Peripheral.interv","indexsymptoms_latest_4g","Stenosis_ipsilateral","stenosis_con_bin", "SourceCD34", "SourceCD68","SourceSMA","SourceHE","SourceEVG"),function(x)as.formula(paste('Surv(ep_major_t_3years,epmajor.3years)~',x)))
+
+# Making a list of the univariate baseline characteristic models
+univ_models <- lapply(univ_formulas, function(x){coxph(x,data=ExpressScan)})
+univ_models
+
+# The following baseline variables are univariately associated with MACE with a p-value of <0.10: Age, Gender, GFR_MDRD, TC_final_LN, HDL_final_LN, Hypertension.drugs, DiabetesStatus, Med.anticoagulants, Med.all.antiplatelet, SmokerStatus, CAD_history, PAOD, Peripheral.interv, stenosis_con_bin
+
+cat("Preparation is done.\n")
+```
+## Model 3 - full cohort 
+In this model we correct for _Plaquesize_ + any other possible _confounders_ (which are, baseline characteristics that are associated with MACE (p<0.1) and with the plaque characteristic (p<0.1)).
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+Based on the outcome of the preparation, we no can select the confounders for every plaque characteristic
+CD34: _PlaquesizeCD34_rank_, _Gender_, _Hypertension.selfreport_, _TC_final_LN_, _Med.anticoagulants_, _Peripheral.interv_
+CD66b: _PlaquesizeCD66b_rank_, _Age_, _Gender_, _TC_final_LN_, _HDL_final_LN_, _stenosis_con_bin_
+CD68: _PlaquesizeCD68_rank_, _Age_, _Gender_, _SmokerStatus_, _TC_final_LN_, _HDL_final_LN_, _CAD_history_
+SMA: _PlaquesizeSMA_rank_, _Gender_, _Hypertension.drugs_, _Peripheral.interv_
+HE: _PlaquesizeHE_rank_, _Gender_, _Hypertension.drugs_, _stenosis_con_bin_
+EVG: _PlaquesizeEVG_rank_, _Gender_, _Hypertension.selfreport_, _HDL_final_LN_, _Hypertension.drugs_, _GFR_MDRD_, _Peripheral.interv_
+GLYCC: _PlaquesizeGlycc_rank_, _Gender_, _Hypertension.selfreport_, _SmokingStatus_, _Hypertension.drugs_, _CAD_history_
+```{r Model 3: MV incl plaquesize/confounders,}
+# CD34
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD34_TissueCount_rank + PlaquesizeCD34_rank + Gender + Hypertension.selfreport + TC_final_LN + Med.anticoagulants + Peripheral.interv, data=ExpressScan))
+# CD66b
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD66b_TissueCount_rank + PlaquesizeCD66b_rank + Age + TC_final_LN + HDL_final_LN + Gender  + stenosis_con_bin, data=ExpressScan))
+# CD68
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD68_TissueCount_rank + PlaquesizeCD68_rank + Age + Gender + SmokerStatus + TC_final_LN + HDL_final_LN + CAD_history, data=ExpressScan))
+# SMA
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_SMA_TissueCount_rank + PlaquesizeSMA_rank + Gender + Hypertension.drugs + Peripheral.interv, data=ExpressScan))
+# HE
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_HE_TissueCount_rank + PlaquesizeHE_rank + Gender + Hypertension.drugs  + stenosis_con_bin, data=ExpressScan))
+# EVG
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_EVG_Tissue_rank + PlaquesizeEVG_rank + Gender + GFR_MDRD + HDL_final_LN + Hypertension.drugs + Peripheral.interv, data=ExpressScan))
+# Glycophorin C
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank + PlaquesizeGlycc_rank + Gender + Hypertension.selfreport + SmokerStatus + Hypertension.drugs + CAD_history, data=ExpressScan))
+```
+### Intraplaque hemorrhage Models - full cohort
+For the IPH models we use a similar approach than for the clinical status models, namely:
+Model 1: Univariable logistic regression models association between intraplaque hemorrhage ( _IPH.bin_ ) (dependent) and _Total_GLYCC_Tissue_rank_ as independent variable
+Model 2: Model 1 + we correct for _Plaquesize_
+Model 3: Model 2 + but we correct for _confounders_
+```{r IPH models Glycophorin C}
+ExpressScan$IPH.bin <- factor(ExpressScan$IPH.bin, levels = c("0", "1"), labels = c("No", "Yes"))
+summary(ExpressScan$IPH.bin)
+
+
+# Visualize
+#tiff("IPH.tiff", units="in", width=5, height=5, res=1200)
+
+
+ggpubr::ggboxplot(ExpressScan %>% filter(!is.na(IPH.bin)),
+                  x = c("IPH.bin"),
+                  y = "Total_GLYCC_Tissue_rank", 
+                  # xlab = "Group",
+                  ylab = "Quantified Glycophorin C (inverse-rank transformed)",
+                  xlab = "Intraplaque hemorrhage",
+                  color = "IPH.bin",
+                  palette = c("#5EB17F", "#1290D9"),
+                  add = "jitter") + theme(legend.position="right") #+ stat_compare_means(method = "kruskal") 
+
+#dev.off()                  
+
+# Model 1: Univariable association of Glycophorin and Intraplaque hemorrhage
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank, data=ExpressScan, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+# Model 2: Multivariable association of Glycophorin and Intraplaque hemorrhage (corrected for plaque size)
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank, data=ExpressScan, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+
+# Preparation for model 3: Glycophorin C is associated with the following baseline characteristics (p-value <0.1): Hospital, ORdate_epoch, Gender, Hypertension.selfreport, SmokerStatus, Hypertension.drugs, CAD_history, Stenosis_ipsilateral
+Glycophorin_vars <- c("Hospital", "ORdate_epoch", "Gender", "Hypertension.selfreport", "SmokerStatus", "Hypertension.drugs", "CAD_history", "Stenosis_ipsilateral")
+preparation <- lapply(Glycophorin_vars, function(x) {glm(substitute(IPH.bin ~ i, list(i = as.name(x))), family=binomial, data = ExpressScan)})
+lapply(preparation,summary) # full summary
+#lapply(preparation, coefficients) # only coefficients
+sapply(preparation, function(f) summary(f)$coefficients[,4]) # only p-values, this is what we are interested in since this will determine the next step in the analysis.
+
+# Model 3: Multivariable assocation of Glycophorin and Intraplaque hemorrhage
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank + Hospital + ORdate_epoch + Gender + CAD_history, data=ExpressScan, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+```
+### Stratifying on Gender
+Creating two separate dataframes for a male and female subset.
+The ordinal logistic regression for indexsymptoms and Cox Regression Models for MACE (Model 1, Model 2 and Model 3) will be repeated.
+```{r Stratifying on Gender, warning=FALSE, include=TRUE}
+cat("Creating male and female dataframes.\n")
+
+## Male
+ExpressScan_Male <- as.data.frame(subset(ExpressScan, Gender == "1", drop=TRUE)) # 1 = "male"
+
+## Female
+ExpressScan_Female <- as.data.frame(subset(ExpressScan, Gender == "0", drop=TRUE)) # 0 = "female"
+
+ExpresssScan_Glyc <- as.data.frame(subset(ExpressScan_Female, Total_GLYCC_Tissue > 0, drop=TRUE))
+
+margin.table(table(ExpressScan_Female$IPH.bin,ExpressScan_Female$Total_GLYCC_Tissue_rank))
+summary(ExpresssScan_Glyc$IPH.bin)
+summary(ExpresssScan_Glyc$Hypertension.selfreport)
+
+test = print(CreateTableOne(vars = c("Total_GLYCC_Tissue","Hypertension.selfreport"), 
+                                         # factorVars = basetable_bin,
+                                         strata = "IPH.bin",
+                                         data = ExpresssScan_Glyc, includeNA = FALSE), 
+                          missing = TRUE,
+                          quote = FALSE, noSpaces = FALSE, showAllLevels = TRUE, explain = TRUE, 
+                          format = "fp", 
+                          contDigits = 2)[,1:3]
+
+
+
+#write.csv2(ExpressScan_Male,file= paste0(OUT_loc, "/", Today, "ExpressScan_Male.csv"), sep=';', row.names=TRUE, quote=FALSE)
+#write.csv2(ExpressScan_Female,file= paste0(OUT_loc, "/", Today, "ExpressScan_Female.csv"), sep=';', row.names=TRUE, quote=FALSE)
+```
+
+
+### Male cohort
+
+### Clinical status before surgery, asymptomatic versus symptomatic - Male cohort
+For the dependent variable in the logistic regression models we use _asympt_sympt_latest_.
+
+Model 1: Univariable logistic models per plaque characteristic
+Model 2: Multivariable logistic models per plaque characteristic, we correct for _Plaquesize_
+Model 3: Multivariable logistic models per plaque characteristic, we correct for _Plaquesize_ and _confounders_
+
+## Model 1 - Male cohort
+We do not correct for any covariables.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+```{r Model1: univariable logistic models, index symptoms asymptomatic versus symptomatic, male cohort, include=TRUE, paged.print=TRUE}
+# CD34
+CD34 <- glm(asympt_sympt_latest~Total_CD34_TissueCount_rank, data=ExpressScan_Male, family = binomial)
+summary(CD34)
+exp(coefficients(CD34))
+exp(confint(CD34))
+#CD66b
+CD66b <- glm(asympt_sympt_latest~Total_CD66b_TissueCount_rank, data=ExpressScan_Male, family = binomial)
+summary(CD66b)
+exp(coefficients(CD66b))
+exp(confint(CD66b))
+#CD68
+CD68 <- glm(asympt_sympt_latest~Total_CD68_TissueCount_rank, data=ExpressScan_Male, family = binomial)
+summary(CD68)
+exp(coefficients(CD68))
+exp(confint(CD68))
+#SMA
+SMA <- glm(asympt_sympt_latest~Total_SMA_TissueCount_rank, data=ExpressScan_Male, family = binomial)
+summary(SMA)
+exp(coefficients(SMA))
+exp(confint(SMA))
+#HE
+HE <- glm(asympt_sympt_latest~Total_HE_TissueCount_rank, data=ExpressScan_Male, family = binomial)
+summary(HE)
+exp(coefficients(HE))
+exp(confint(HE))
+#EVG
+EVG <- glm(asympt_sympt_latest~Total_EVG_Tissue_rank, data=ExpressScan_Male, family = binomial)
+summary(EVG)
+exp(coefficients(EVG))
+exp(confint(EVG))
+#Glycc
+GLYCC <- glm(asympt_sympt_latest~Total_GLYCC_Tissue_rank, data=ExpressScan_Male, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+```
+## Model 2 - Male cohort
+Multivariable logistic models per plaque characteristic, we correct for _Plaquesize_.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+```{r Model 2: multivariable logistic models, index symptoms asymptomatic versus symptomatic, male cohort, include=TRUE, paged.print=TRUE}
+# CD34
+CD34 <- glm(asympt_sympt_latest~Total_CD34_TissueCount_rank + PlaquesizeCD34_rank, data=ExpressScan_Male, family = binomial)
+summary(CD34)
+exp(coefficients(CD34))
+exp(confint(CD34))
+#CD66b
+CD66b <- glm(asympt_sympt_latest~Total_CD66b_TissueCount_rank + PlaquesizeCD66b_rank, data=ExpressScan_Male, family = binomial)
+summary(CD66b)
+exp(coefficients(CD66b))
+exp(confint(CD66b))
+#CD68
+CD68 <- glm(asympt_sympt_latest~Total_CD68_TissueCount_rank + PlaquesizeCD68_rank, data=ExpressScan_Male, family = binomial)
+summary(CD68)
+exp(coefficients(CD68))
+exp(confint(CD68))
+#SMA
+SMA <- glm(asympt_sympt_latest~Total_SMA_TissueCount_rank + PlaquesizeSMA_rank, data=ExpressScan_Male, family = binomial)
+summary(SMA)
+exp(coefficients(SMA))
+exp(confint(SMA))
+#HE
+HE <- glm(asympt_sympt_latest~Total_HE_TissueCount_rank + PlaquesizeHE_rank, data=ExpressScan_Male, family = binomial)
+summary(HE)
+exp(coefficients(HE))
+exp(confint(HE))
+#EVG
+EVG <- glm(asympt_sympt_latest~Total_EVG_Tissue_rank +  PlaquesizeEVG_rank, data=ExpressScan_Male, family = binomial)
+summary(EVG)
+exp(coefficients(EVG))
+exp(confint(EVG))
+#Glycc
+GLYCC <- glm(asympt_sympt_latest~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank, data=ExpressScan_Male, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+```
+## Model 3 - Male cohort
+Multivariable logistic models per plaque characteristic, we correct for _Plaquesize_ and _confounders_.
+We first have to know which baseline characteristics are confounders in the association between independent plaque characteristics and the dependent outcome variable _asympt_sympt_latest_.
+We will make separate univariable models between baseline characteristics and the dependent outcome variable _asympt_sympt_latest_, when there is a (weak) association with a p-value of <0.1, the association(s) between the baseline characteristic and the plaque characteristic variable(s) will be tested. If there is a (weak) association between the plaque characteristic variable and baseline variable than this baseline variable will be classified as a confounder in the association between the plaque characteristic and dependent outcome variable _asympt_sympt_latest_, and will therefore be included in the final multivariable model.
+```{r Preparation for model 3 logistic regression, _asympt_sympt_latest_, Male cohort}
+vars <-c("Hospital","ORdate_epoch", "Age","Hypertension.selfreport","systolic","diastoli","DiabetesStatus","TC_final_LN", "LDL_final", "HDL_final_LN", "TG_final_LN","risk614","Med.Statin.LLD","Hypertension.drugs","Med.all.antiplatelet","Med.anticoagulants","BMI_LN","GFR_MDRD","SmokerStatus","CAD_history","StrokeTIA_history","PAOD","Peripheral.interv","Stenosis_ipsilateral","stenosis_con_bin", "SourceCD34", "SourceCD68","SourceSMA","SourceHE","SourceEVG")
+
+preparation <- lapply(vars, function(x) {glm(substitute(asympt_sympt_latest ~ i, list(i = as.name(x))), family=binomial, data = ExpressScan_Male)})
+lapply(preparation,summary) # full summary
+#lapply(preparation, coefficients) # only coefficients
+#sapply(preparation, function(f) summary(f)$coefficients[,4]) # only p-values, this is what we are interested in since this will determine the next step in the analysis.
+
+# Based on the strong association between and the description of both variables StrokeTIA_history (history of TIA or Stroke prior to surgery) and asympt_sympt_latest(Asymptomatic or symptomatic in <183 days before surgery), we conclude that StrokeTIA_history although one of the baseline characteristics will not be added in the final models.
+```
+## Model 3 - Male cohort
+Multivariable logistic models per plaque characteristic, where we correct for _Plaquesize_ and _confounders_.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+Based on the outcome of the preparation, we no can select the confounders for every plaque characteristic
+CD34: _PlaquesizeCD34_rank_, _ORdate_epoch_, _BMI_LN_, _SourceCD34_
+CD66b: _PlaquesizeCD66b_rank_, _Age_
+CD68: _PlaquesizeCD68_rank_, _ORdate_epoch_, _Age_, _BMI_LN_, _CAD_history_
+SMA: _PlaquesizeSMA_rank_, _ORdate_epoch_, _BMI_LN_, _Hypertension.drugs_
+HE: _PlaquesizeHE_rank_, _ORdate_epoch_, _Hypertension.drugs_, _SourceHE_
+EVG: _PlaquesizeEVG_rank_, _BMI_LN_, _GFR_MDRD_, _Hypertension.drugs_, _Peripheral.interv_, _stenosis_con_bin_, _SourceEVG_
+GLYCC: _PlaquesizeGlycc_rank_, _ORdate_epoch_, _Hypertension.drugs_, _CAD_history_
+```{r Model 3: multivariable logistic models, index symptoms asymptomatic versus symptomatic, male, cohort, include=TRUE, paged.print=TRUE}
+# CD34
+CD34 <- glm(asympt_sympt_latest~Total_CD34_TissueCount_rank + PlaquesizeCD34_rank + ORdate_epoch + BMI_LN +SourceCD34, data=ExpressScan_Male, family = binomial)
+summary(CD34)
+exp(coefficients(CD34))
+exp(confint(CD34))
+#CD66b
+CD66b <- glm(asympt_sympt_latest~Total_CD66b_TissueCount_rank + PlaquesizeCD66b_rank + Age, data=ExpressScan_Male, family = binomial)
+summary(CD66b)
+exp(coefficients(CD66b))
+exp(confint(CD66b))
+#CD68
+CD68 <- glm(asympt_sympt_latest~Total_CD68_TissueCount_rank + PlaquesizeCD68_rank + ORdate_epoch + Age + BMI_LN + CAD_history, data=ExpressScan_Male, family = binomial)
+summary(CD68)
+exp(coefficients(CD68))
+exp(confint(CD68))
+#SMA
+SMA <- glm(asympt_sympt_latest~Total_SMA_TissueCount_rank + PlaquesizeSMA_rank + ORdate_epoch + BMI_LN + Hypertension.drugs, data=ExpressScan_Male, family = binomial)
+summary(SMA)
+exp(coefficients(SMA))
+exp(confint(SMA))
+#HE
+HE <- glm(asympt_sympt_latest~Total_HE_TissueCount_rank + PlaquesizeHE_rank + ORdate_epoch + Hypertension.drugs + SourceHE, data=ExpressScan_Male, family = binomial)
+summary(HE)
+exp(coefficients(HE))
+exp(confint(HE))
+#EVG
+EVG <- glm(asympt_sympt_latest~Total_EVG_Tissue_rank +  PlaquesizeEVG_rank + BMI_LN + GFR_MDRD + Hypertension.drugs + Peripheral.interv + stenosis_con_bin + SourceEVG, data=ExpressScan_Male, family = binomial)
+summary(EVG)
+exp(coefficients(EVG))
+exp(confint(EVG))
+#Glycc
+GLYCC <- glm(asympt_sympt_latest~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank + ORdate_epoch + Hypertension.drugs + CAD_history, data=ExpressScan_Male, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+```
+### MACE Models - Male
+
+## Model 1 - Male cohort
+In this model we do not correct for any variables.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+```{r Male: Model 1: Univariate, male cohort, warnings = FALSE, include = TRUE}
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD34_TissueCount_rank,data=ExpressScan_Male)) #CD34
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD66b_TissueCount_rank,data=ExpressScan_Male)) #CD66b
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD68_TissueCount_rank,data=ExpressScan_Male)) #CD68
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_SMA_TissueCount_rank,data=ExpressScan_Male)) #SMA
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_HE_TissueCount_rank,data=ExpressScan_Male)) #HE
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_EVG_Tissue_rank,data=ExpressScan_Male)) #EVG
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank,data=ExpressScan_Male)) #GLYCC
+```
+## Model 2 - Male cohort
+In this model we correct for _Plaquesize_.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+```{r Model 2: MV MACE models, incl plaquesize, male cohort, warnings = FALSE, include = TRUE}
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD34_TissueCount_rank+PlaquesizeCD34_rank,data=ExpressScan_Male)) #CD34
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD66b_TissueCount_rank+PlaquesizeCD66b_rank,data=ExpressScan_Male)) #CD66b
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD68_TissueCount_rank+PlaquesizeCD68_rank,data=ExpressScan_Male)) #CD68
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_SMA_TissueCount_rank+PlaquesizeSMA_rank,data=ExpressScan_Male)) #SMA
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_HE_TissueCount_rank+PlaquesizeHE_rank,data=ExpressScan_Male)) #HE
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_EVG_Tissue_rank+PlaquesizeEVG_rank,data=ExpressScan_Male)) #EVG
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+PlaquesizeGlycc_rank,data=ExpressScan_Male)) #GLYCC
+```
+### Preparation for Model 3 - Male cohort
+Determining which baseline variables are associated with the plaque characteristics
+```{r Male: Association baseline variables, preparation}
+continuous_variables = c("Age", "diastoli", "systolic", "GFR_MDRD","ORdate_epoch","TC_final_LN", "LDL_final_LN", "HDL_final_LN", "TG_final_LN", "BMI_LN")
+categorical_variables <- c("Hospital", "DiabetesStatus", "SmokerCurrent", "Hypertension.selfreport", "risk614","Med.Statin.LLD", "Hypertension.drugs","Med.all.antiplatelet", "Med.anticoagulants", "CAD_history", "PAOD", "Peripheral.interv", "StrokeTIA_history", "Stenosis_ipsilateral", "stenosis_con_bin","indexsymptoms_latest_4g")
+plaque_vars <-c("Total_CD34_TissueCount_rank","Total_CD66b_TissueCount_rank","Total_CD68_TissueCount_rank","Total_SMA_TissueCount_rank","Total_HE_TissueCount_rank","Total_EVG_Tissue_rank","Total_GLYCC_Tissue_rank")
+
+p.value <-c("p.value")
+estimate <-c("estimate")
+```
+Male subset: Continuous variables
+```{r Male: Continuous variables, warnings = FALSE, include = TRUE}
+plaque_vars <-c("Total_CD34_TissueCount_rank","Total_CD66b_TissueCount_rank","Total_CD68_TissueCount_rank","Total_SMA_TissueCount_rank","Total_HE_TissueCount_rank","Total_EVG_Tissue_rank","Total_GLYCC_Tissue_rank")
+
+### ORdate_epoch
+Association_ORdate_epoch <-lapply(ExpressScan_Male[plaque_vars], function (x) cor.test(ExpressScan_Male$ORdate_epoch, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_ORdate_epoch, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_ORdate_epoch, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# Use this to see the variable names of the continuous variables while extracting the Spearman Rho's and P-value's
+#pvalue_markers <- unlist(lapply(Association_ORdate_epoch, function(e) {unlist(e[p.value])}))
+#estimate_markers <- unlist(lapply(Association_ORdate_epoch, function(e) {unlist(e[estimate])}))
+#pvalue_markers
+#estimate_markers
+
+### Age
+Association_Age <-lapply(ExpressScan_Male[plaque_vars], function (x) cor.test(ExpressScan_Male$Age, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_Age, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_Age, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### systolic
+Association_systolic <-lapply(ExpressScan_Male[plaque_vars], function (x) cor.test(ExpressScan_Male$systolic, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_systolic, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_systolic, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### diastoli
+Association_diastoli <-lapply(ExpressScan_Male[plaque_vars], function (x) cor.test(ExpressScan_Male$diastoli, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_diastoli, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_diastoli, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### GFR_MDRD
+Association_GFR_MDRD <-lapply(ExpressScan_Male[plaque_vars], function (x) cor.test(ExpressScan_Male$GFR_MDRD, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_GFR_MDRD, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_GFR_MDRD, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### TC_final_LN
+Association_TC_final_LN <-lapply(ExpressScan_Male[plaque_vars], function (x) cor.test(ExpressScan_Male$TC_final_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_TC_final_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_TC_final_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### LDL_final_LN
+Association_LDL_final_LN <-lapply(ExpressScan_Male[plaque_vars], function (x) cor.test(ExpressScan_Male$LDL_final_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_LDL_final_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_LDL_final_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### HDL_final_LN
+Association_HDL_final_LN <-lapply(ExpressScan_Male[plaque_vars], function (x) cor.test(ExpressScan_Male$HDL_final_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_HDL_final_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_HDL_final_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### TG_final_LN
+Association_TG_final_LN <-lapply(ExpressScan_Male[plaque_vars], function (x) cor.test(ExpressScan_Male$TG_final_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_TG_final_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_TG_final_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### BMI_LN
+Association_BMI_LN <-lapply(ExpressScan_Male[plaque_vars], function (x) cor.test(ExpressScan_Male$BMI_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_BMI_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_BMI_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# I still need to write a better code to extract the variable names, Spearman Rho's and p-values and put these in a dataframe/list which I can save as a .csv or .xlsx file, but this works for now.
+```
+Male subset: Categorical variables
+```{r Male: Categorical variables, warnings = FALSE, include = TRUE}
+dichotomous_vars <- c("Hospital","Hypertension.selfreport","risk614","DiabetesStatus","Med.Statin.LLD","Hypertension.drugs","Med.all.antiplatelet","Med.anticoagulants","CAD_history","PAOD","Peripheral.interv","StrokeTIA_history","stenosis_con_bin")
+group_vars <- c("Stenosis_ipsilateral","SmokerStatus")
+
+# Categorical variables: CD34, t-tests + anova for stenosis ipsilateral and SmokerStatus
+CD34_dich<-lapply(ExpressScan_Male[dichotomous_vars], function(x) t.test(ExpressScan_Male$Total_CD34_TissueCount_rank~x))
+result <- do.call(rbind, lapply(CD34_dich,`[[`, "estimate"))
+pval <- sapply(CD34_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Male$Total_CD34_TissueCount_rank~ExpressScan_Male$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Male$Total_CD34_TissueCount_rank~ExpressScan_Male$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Male$Total_CD34_TissueCount_rank~ExpressScan_Male$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Male$Total_CD34_TissueCount_rank~ExpressScan_Male$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: CD66b, t-tests + anova for stenosis ipsilateral and SmokerStatus
+CD66b_dich<-lapply(ExpressScan_Male[dichotomous_vars], function(x) t.test(ExpressScan_Male$Total_CD66b_TissueCount_rank~x))
+result <- do.call(rbind, lapply(CD66b_dich,`[[`, "estimate"))
+pval <- sapply(CD66b_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Male$Total_CD66b_TissueCount_rank~ExpressScan_Male$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Male$Total_CD66b_TissueCount_rank~ExpressScan_Male$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Male$Total_CD66b_TissueCount_rank~ExpressScan_Male$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Male$Total_CD66b_TissueCount_rank~ExpressScan_Male$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: CD68, t-tests + anova for ipsilateral and SmokerStatus
+CD68_dich<-lapply(ExpressScan_Male[dichotomous_vars], function(x) t.test(ExpressScan_Male$Total_CD68_TissueCount_rank~x))
+result <- do.call(rbind, lapply(CD68_dich,`[[`, "estimate"))
+pval <- sapply(CD68_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Male$Total_CD68_TissueCount_rank~ExpressScan_Male$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Male$Total_CD68_TissueCount_rank~ExpressScan_Male$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Male$Total_CD68_TissueCount_rank~ExpressScan_Male$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Male$Total_CD68_TissueCount_rank~ExpressScan_Male$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: SMA, t-tests + anova for ipsilateral and SmokerStatus
+SMA_dich<-lapply(ExpressScan_Male[dichotomous_vars], function(x) t.test(ExpressScan_Male$Total_SMA_TissueCount_rank~x))
+result <- do.call(rbind, lapply(SMA_dich,`[[`, "estimate"))
+pval <- sapply(SMA_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Male$Total_SMA_TissueCount_rank~ExpressScan_Male$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Male$Total_SMA_TissueCount_rank~ExpressScan_Male$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Male$Total_SMA_TissueCount_rank~ExpressScan_Male$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Male$Total_SMA_TissueCount_rank~ExpressScan_Male$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: HE, t-tests + anova for stenosis ipsilateral and SmokerStatus
+HE_dich<-lapply(ExpressScan_Male[dichotomous_vars], function(x) t.test(ExpressScan_Male$Total_HE_TissueCount_rank~x))
+result <- do.call(rbind, lapply(HE_dich,`[[`, "estimate"))
+pval <- sapply(HE_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Male$Total_HE_TissueCount_rank~ExpressScan_Male$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Male$Total_HE_TissueCount_rank~ExpressScan_Male$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Male$Total_HE_TissueCount_rank~ExpressScan_Male$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Male$Total_HE_TissueCount_rank~ExpressScan_Male$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: EVG, t-tests + anova for stenosis ipsilateral and SmokerStatus
+EVG_dich<-lapply(ExpressScan_Male[dichotomous_vars], function(x) t.test(ExpressScan_Male$Total_EVG_Tissue_rank~x))
+result <- do.call(rbind, lapply(EVG_dich,`[[`, "estimate"))
+pval <- sapply(EVG_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Male$Total_EVG_Tissue_rank~ExpressScan_Male$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Male$Total_EVG_Tissue_rank~ExpressScan_Male$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Male$Total_EVG_Tissue_rank~ExpressScan_Male$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Male$Total_EVG_Tissue_rank~ExpressScan_Male$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: GLYCC, t-tests + anova for ipsilateral and SmokerStatus
+GLYCC_dich<-lapply(ExpressScan_Male[dichotomous_vars], function(x) t.test(ExpressScan_Male$Total_GLYCC_Tissue_rank~x))
+result <- do.call(rbind, lapply(GLYCC_dich,`[[`, "estimate"))
+pval <- sapply(GLYCC_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Male$Total_GLYCC_Tissue_rank~ExpressScan_Male$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Male$Total_GLYCC_Tissue_rank~ExpressScan_Male$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Male$Total_GLYCC_Tissue_rank~ExpressScan_Male$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Male$Total_GLYCC_Tissue_rank~ExpressScan_Male$SmokerStatus), "means") #means SmokerStatus
+```
+Male subset: Association of baseline characteristics with outcome (MAjor Cardiovascular Events (MACE) during follow-up)
+```{r Male: Identifying possible confounders, warnings = FALSE, include = TRUE}
+# Creating univariate formulas
+univ_formulas <- sapply(c("Hospital","ORdate_epoch", "Age","Hypertension.selfreport","systolic","diastoli","DiabetesStatus","TC_final_LN", "LDL_final", "HDL_final_LN", "TG_final_LN","risk614","Med.Statin.LLD","Hypertension.drugs","Med.all.antiplatelet","Med.anticoagulants","BMI_LN","GFR_MDRD","SmokerStatus","CAD_history","StrokeTIA_history","PAOD","Peripheral.interv","indexsymptoms_latest_4g","Stenosis_ipsilateral","stenosis_con_bin", "SourceCD34", "SourceCD68","SourceSMA","SourceHE","SourceEVG"),function(x)as.formula(paste('Surv(ep_major_t_3years,epmajor.3years)~',x)))
+
+# Making a list of the univariate baseline characteristic models
+univ_models <- lapply(univ_formulas, function(x){coxph(x,data=ExpressScan_Male)})
+univ_models
+
+# The following baseline variables are univariately associated with MACE with a p-value of <0.10: Age, systolic, DiabetesStatus, HDL_final_LN, Hypertension.drugs, Med.all.antiplatelet, Med.anticoagulants, GFR_MDRD, SmokerStatus, CAD_history,PAOD, Peripheral.interv, stenosis_con_bin
+
+cat("Preparation is done.\n")
+```
+## Model 3 - Male 
+In this model we correct for _Plaquesize_ + any other possible _confounders_ (which are, baseline characteristics that are associated with MACE (p<0.1) and with the plaque characteristic (p<0.1)).
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+Based on the outcome of the preparation, we no can select the confounders for ev)ery plaque characteristic
+CD34: _PlaquesizeCD34_, _Med.anticoagulants_
+CD66b: _PlaquesizeCD66b_, _Age_, _HDL_final_LN_, _DiabetesStatus_
+CD68: _PlaquesizeCD68_, _Age_, _HDL_final_LN_, _SmokerStatus_, _CAD_history_
+SMA: _PlaquesizeSMA_, _Hypertension.drugs_
+HE: _PlaquesizeHE_, _Hypertension.drugs_
+EVG: _PlaquesizeEVG_, _SmokerStatus_, _HDL_final_LN_, _GFR_MDRD_, _Hypertension.drugs_, _Med.all.antiplatelet_, _Peripheral.interv_, _stenosis_con_bin_
+GLYCC: _PlaquesizeGlycc_, _Hypertension.drugs_, _CAD_history_
+```{r Male: Model 3: MV incl plaquesize/confounders,}
+# CD34
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD34_TissueCount_rank + PlaquesizeCD34_rank + Med.anticoagulants, data=ExpressScan_Male))
+# CD66b
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD66b_TissueCount_rank + PlaquesizeCD66b_rank + Age + HDL_final_LN + DiabetesStatus, data=ExpressScan_Male))
+# CD68
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD68_TissueCount_rank + PlaquesizeCD68_rank + Age + HDL_final_LN + SmokerStatus +CAD_history, data=ExpressScan_Male))
+# SMA
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_SMA_TissueCount_rank + PlaquesizeSMA_rank + Hypertension.drugs, data=ExpressScan_Male))
+# HE
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_HE_TissueCount_rank + PlaquesizeHE_rank + Hypertension.drugs, data=ExpressScan_Male))
+# EVG
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_EVG_Tissue_rank + PlaquesizeEVG_rank + SmokerStatus + HDL_final_LN + GFR_MDRD + Hypertension.drugs + Med.all.antiplatelet + Peripheral.interv + stenosis_con_bin, data=ExpressScan_Male))
+# Glycophorin C
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank + PlaquesizeGlycc_rank + Hypertension.drugs + CAD_history, data=ExpressScan_Male))
+```
+### Intraplaque hemorrhage Models - Male cohort
+For the IPH models we use a similar approach than for the clinical status models, namely:
+- Model 1: Univariable logistic regression models association between intraplaque hemorrhage ( _IPH.bin_ ) (dependent) and _Total_GLYCC_Tissue_rank_ as independent variable
+- Model 2: Model 1 + we correct for _Plaquesize_
+- Model 3: Model 2 + but we correct for _confounders_
+```{r IPH models Glycophorin C: Gender stratified analysis, Male}
+# Visualize
+ggpubr::ggboxplot(ExpressScan_Male %>% filter(!is.na(IPH.bin)),
+                  x = c("IPH.bin"),
+                  y = "Total_GLYCC_Tissue_rank", 
+                  # xlab = "Group",
+                  ylab = "Quantified Glycophorin C (inverse-rank transformed)",
+                  xlab = "Intraplaque hemorrhage",
+                  color = "IPH.bin",
+                  palette = "npg",
+                  add = "jitter") + stat_compare_means(method = "kruskal") + theme(legend.position="right")
+
+# Model 1: Univariable association of Glycophorin and Intraplaque hemorrhage
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank, data=ExpressScan_Male, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+
+# Model 2: Multivariable association of Glycophorin and Intraplaque hemorrhage (corrected for plaque size)
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank, data=ExpressScan_Male, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+
+# Preparation for model 3: Glycophorin C is associated with the following baseline characteristics (p-value <0.1) in the male subset: Hospital, date of surgery, Hypertension.drugs, History of CAD and Stenosis_ipsilateral
+Glycophorin_vars_male <- c("Hospital", "ORdate_epoch", "Hypertension.drugs", "CAD_history", "Stenosis_ipsilateral")
+preparation <- lapply(Glycophorin_vars_male, function(x) {glm(substitute(IPH.bin ~ i, list(i = as.name(x))), family=binomial, data = ExpressScan_Male)})
+lapply(preparation,summary) # full summary
+#lapply(preparation, coefficients) # only coefficients
+#sapply(preparation, function(f) summary(f)$coefficients[,4]) # only p-values, this is what we are interested in since this will determine the next step in the analysis.
+
+# Model 3: Multivariable assocation of Glycophorin and Intraplaque hemorrhage
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank + Hospital + ORdate_epoch + CAD_history, data=ExpressScan_Male, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+```
+
+### Female cohort
+### Clinical status before surgery, asymptomatic versus symptomatic - Female cohort
+For the dependent variable in the logistic regression models we use _asympt_sympt_latest_.
+
+Model 1: Univariable logistic models per plaque characteristic
+Model 2: Multivariable logistic models per plaque characteristic, we correct for _Plaquesize_
+Model 3: Multivariable logistic models per plaque characteristic, we correct for _Plaquesize_ and _confounders_
+
+## Model 1 - Female cohort
+We do not correct for any covariables.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+```{r Model1: univariable logistic models, index symptoms asymptomatic versus symptomatic,female cohort, include=TRUE, paged.print=TRUE}
+# CD34
+CD34 <- glm(asympt_sympt_latest~Total_CD34_TissueCount_rank, data=ExpressScan_Female, family = binomial)
+summary(CD34)
+exp(coefficients(CD34))
+exp(confint(CD34))
+#CD66b
+CD66b <- glm(asympt_sympt_latest~Total_CD66b_TissueCount_rank, data=ExpressScan_Female, family = binomial)
+summary(CD66b)
+exp(coefficients(CD66b))
+exp(confint(CD66b))
+#CD68
+CD68 <- glm(asympt_sympt_latest~Total_CD68_TissueCount_rank, data=ExpressScan_Female, family = binomial)
+summary(CD68)
+exp(coefficients(CD68))
+exp(confint(CD68))
+#SMA
+SMA <- glm(asympt_sympt_latest~Total_SMA_TissueCount_rank, data=ExpressScan_Female, family = binomial)
+summary(SMA)
+exp(coefficients(SMA))
+exp(confint(SMA))
+#HE
+HE <- glm(asympt_sympt_latest~Total_HE_TissueCount_rank, data=ExpressScan_Female, family = binomial)
+summary(HE)
+exp(coefficients(HE))
+exp(confint(HE))
+#EVG
+EVG <- glm(asympt_sympt_latest~Total_EVG_Tissue_rank, data=ExpressScan_Female, family = binomial)
+summary(EVG)
+exp(coefficients(EVG))
+exp(confint(EVG))
+#Glycc
+GLYCC <- glm(asympt_sympt_latest~Total_GLYCC_Tissue_rank, data=ExpressScan_Female, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+```
+## Model 2 - Female cohort
+Multivariable logistic models per plaque characteristic, we correct for _Plaquesize_.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+```{r Model 2: multivariable logistic models, index symptoms asymptomatic versus symptomatic, female cohort, include=TRUE, paged.print=TRUE}
+# CD34
+CD34 <- glm(asympt_sympt_latest~Total_CD34_TissueCount_rank + PlaquesizeCD34_rank, data=ExpressScan_Female, family = binomial)
+summary(CD34)
+exp(coefficients(CD34))
+exp(confint(CD34))
+#CD66b
+CD66b <- glm(asympt_sympt_latest~Total_CD66b_TissueCount_rank + PlaquesizeCD66b_rank, data=ExpressScan_Female, family = binomial)
+summary(CD66b)
+exp(coefficients(CD66b))
+exp(confint(CD66b))
+#CD68
+CD68 <- glm(asympt_sympt_latest~Total_CD68_TissueCount_rank + PlaquesizeCD68_rank, data=ExpressScan_Female, family = binomial)
+summary(CD68)
+exp(coefficients(CD68))
+exp(confint(CD68))
+#SMA
+SMA <- glm(asympt_sympt_latest~Total_SMA_TissueCount_rank + PlaquesizeSMA_rank, data=ExpressScan_Female, family = binomial)
+summary(SMA)
+exp(coefficients(SMA))
+exp(confint(SMA))
+#HE
+HE <- glm(asympt_sympt_latest~Total_HE_TissueCount_rank + PlaquesizeHE_rank, data=ExpressScan_Female, family = binomial)
+summary(HE)
+exp(coefficients(HE))
+exp(confint(HE))
+#EVG
+EVG <- glm(asympt_sympt_latest~Total_EVG_Tissue_rank +  PlaquesizeEVG_rank, data=ExpressScan_Female, family = binomial)
+summary(EVG)
+exp(coefficients(EVG))
+exp(confint(EVG))
+#Glycc
+GLYCC <- glm(asympt_sympt_latest~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank, data=ExpressScan_Female, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+```
+## Model 3 - Female cohort
+Multivariable logistic models per plaque characteristic, we correct for _Plaquesize_ and _confounders_.
+We first have to know which baseline characteristics are confounders in the association between independent plaque characteristics and the dependent outcome variable _asympt_sympt_latest_.
+We will make separate univariable models between baseline characteristics and the dependent outcome variable _asympt_sympt_latest_, when there is a (weak) association with a p-value of <0.1, the association(s) between the baseline characteristic and the plaque characteristic variable(s) will be tested. If there is a (weak) association between the plaque characteristic variable and baseline variable than this baseline variable will be classified as a confounder in the association between the plaque characteristic and dependent outcome variable _asympt_sympt_latest_, and will therefore be included in the final multivariable model.
+```{r Preparation for model 3 logistic regression, _asympt_sympt_latest_, Female cohort}
+vars <-c("Hospital","ORdate_epoch", "Age","Hypertension.selfreport","systolic","diastoli","DiabetesStatus","TC_final_LN", "LDL_final", "HDL_final_LN", "TG_final_LN","risk614","Med.Statin.LLD","Hypertension.drugs","Med.all.antiplatelet","Med.anticoagulants","BMI_LN","GFR_MDRD","SmokerStatus","CAD_history","StrokeTIA_history","PAOD","Peripheral.interv","Stenosis_ipsilateral","stenosis_con_bin", "SourceCD34", "SourceCD68","SourceSMA","SourceHE","SourceEVG")
+
+preparation <- lapply(vars, function(x) {glm(substitute(asympt_sympt_latest ~ i, list(i = as.name(x))), family=binomial, data = ExpressScan_Female)})
+lapply(preparation,summary) # full summary
+#lapply(preparation, coefficients) # only coefficients
+#sapply(preparation, function(f) summary(f)$coefficients[,4]) # only p-values, this is what we are interested in since this will determine the next step in the analysis.
+
+# Based on the strong association between and the description of both variables StrokeTIA_history (history of TIA or Stroke prior to surgery) and asympt_sympt_latest(Asymptomatic or symptomatic in <183 days before surgery), we conclude that StrokeTIA_history although one of the baseline characteristics will not be added in the final models.
+```
+## Model 3 - Female cohort
+Multivariable logistic models per plaque characteristic, where we correct for _Plaquesize_ and _confounders_.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+Based on the outcome of the preparation, we no can select the confounders for every plaque characteristic
+CD34: _PlaquesizeCD34_rank_, _ORdate_epoch_, _TC_final_LN_, 
+CD66b: _PlaquesizeCD66b_rank_, _Age_, _TC_final_LN_, _Hypertension.drugs_, _stenosis_con_bin_
+CD68: _PlaquesizeCD68_rank_, _ORdate_epoch_, _Age_, _TC_final_LN_, _stenosis_con_bin_
+SMA: _PlaquesizeSMA_rank_, _ORdate_epoch_, _SmokerStatus, _Peripheral.interv_, _stenosis_con_bin_, _SourceSMA_
+HE: _PlaquesizeHE_rank_, _ORdate_epoch_, _stenosis_con_bin_, _SourceHE_
+EVG: _PlaquesizeEVG_rank_, _Peripheral.interv_, _stenosis_con_bin_, _SourceEVG_
+GLYCC: _PlaquesizeGlycc_rank_, _ORdate_epoch_
+```{r Model 3: multivariable logistic models, index symptoms asymptomatic versus symptomatic, female cohort, include=TRUE, paged.print=TRUE}
+# CD34
+CD34 <- glm(asympt_sympt_latest~Total_CD34_TissueCount_rank + PlaquesizeCD34_rank + ORdate_epoch + TC_final_LN, data=ExpressScan_Female, family = binomial)
+summary(CD34)
+exp(coefficients(CD34))
+exp(confint(CD34))
+#CD66b
+CD66b <- glm(asympt_sympt_latest~Total_CD66b_TissueCount_rank + PlaquesizeCD66b_rank + Age + TC_final_LN + Hypertension.drugs + stenosis_con_bin, data=ExpressScan_Female, family = binomial)
+summary(CD66b)
+exp(coefficients(CD66b))
+exp(confint(CD66b))
+#CD68
+CD68 <- glm(asympt_sympt_latest~Total_CD68_TissueCount_rank + PlaquesizeCD68_rank + ORdate_epoch + Age + TC_final_LN + stenosis_con_bin, data=ExpressScan_Female, family = binomial)
+summary(CD68)
+exp(coefficients(CD68))
+exp(confint(CD68))
+#SMA
+SMA <- glm(asympt_sympt_latest~Total_SMA_TissueCount_rank + PlaquesizeSMA_rank + ORdate_epoch + SmokerStatus + Peripheral.interv +  stenosis_con_bin + SourceSMA,  data=ExpressScan_Female, family = binomial)
+summary(SMA)
+exp(coefficients(SMA))
+exp(confint(SMA))
+#HE
+HE <- glm(asympt_sympt_latest~Total_HE_TissueCount_rank + PlaquesizeHE_rank + ORdate_epoch + stenosis_con_bin + SourceHE, data=ExpressScan_Female, family = binomial)
+summary(HE)
+exp(coefficients(HE))
+exp(confint(HE))
+#EVG
+EVG <- glm(asympt_sympt_latest~Total_EVG_Tissue_rank +  PlaquesizeEVG_rank + Peripheral.interv + stenosis_con_bin + SourceEVG, data=ExpressScan_Female, family = binomial)
+summary(EVG)
+exp(coefficients(EVG))
+exp(confint(EVG))
+#Glycc
+GLYCC <- glm(asympt_sympt_latest~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank + ORdate_epoch, data=ExpressScan_Female, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+```
+### Intraplaque hemorrhage Models - Female cohort
+For the IPH models we use a similar approach than for the clinical status models, namely:
+- Model 1: Univariable logistic regression models association between intraplaque hemorrhage ( _IPH.bin_ ) (dependent) and _Total_GLYCC_Tissue_rank_ as independent variable
+- Model 2: Model 1 + we correct for _Plaquesize_
+- Model 3: Model 2 + but we correct for _confounders_
+```{r IPH models Glycophorin C: Gender stratified analysis, Female}
+# Visualize
+ggpubr::ggboxplot(ExpressScan_Female %>% filter(!is.na(IPH.bin)),
+                  x = c("IPH.bin"),
+                  y = "Total_GLYCC_Tissue_rank", 
+                  # xlab = "Group",
+                  ylab = "Quantified Glycophorin C (inverse-rank transformed)",
+                  xlab = "Intraplaque hemorrhage",
+                  color = "IPH.bin",
+                  palette = "npg",
+                  add = "jitter") + stat_compare_means(method = "kruskal") + theme(legend.position="right")
+
+# Model 1: Univariable association of Glycophorin and Intraplaque hemorrhage
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank, data=ExpressScan_Female, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+
+# Model 2: Multivariable association of Glycophorin and Intraplaque hemorrhage (corrected for plaque size)
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank, data=ExpressScan_Female, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+
+# Preparation for model 3: Glycophorin C is associated with the following baseline characteristics (p-value <0.1) in the Female subset: Hospital, date of surgery, Hypertension.selfreport, Hypertension.drugs)
+
+Glycophorin_vars_Female <- c("Hospital", "ORdate_epoch", "Hypertension.selfreport", "Hypertension.drugs")
+preparation <- lapply(Glycophorin_vars_Female, function(x) {glm(substitute(IPH.bin ~ i, list(i = as.name(x))), family=binomial, data = ExpressScan_Female)})
+lapply(preparation,summary) # full summary
+#lapply(preparation, coefficients) # only coefficients
+#sapply(preparation, function(f) summary(f)$coefficients[,4]) # only p-values, this is what we are interested in since this will determine the next step in the analysis.
+
+# Model 3: Multivariable assocation of Glycophorin and Intraplaque hemorrhage
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank + ORdate_epoch + Hypertension.selfreport, data=ExpressScan_Female, family = binomial)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+```
+### MACE Models - Female
+## Model 1 - Female cohort
+In this model we do not correct for any variables.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+```{r Female: Model 1: Univariate, Female cohort, warnings = FALSE, include = TRUE}
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD34_TissueCount_rank,data=ExpressScan_Female)) #CD34
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD66b_TissueCount_rank,data=ExpressScan_Female)) #CD66b
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD68_TissueCount_rank,data=ExpressScan_Female)) #CD68
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_SMA_TissueCount_rank,data=ExpressScan_Female)) #SMA
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_HE_TissueCount_rank,data=ExpressScan_Female)) #HE
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_EVG_Tissue_rank,data=ExpressScan_Female)) #EVG
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank,data=ExpressScan_Female)) #GLYCC
+```
+## Model 2 - Female cohort
+In this model we correct for _Plaquesize_.
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+```{r Model 2: MV MACE models, incl plaquesize, Female cohort, warnings = FALSE, include = TRUE}
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD34_TissueCount_rank+PlaquesizeCD34_rank,data=ExpressScan_Female)) #CD34
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD66b_TissueCount_rank+PlaquesizeCD66b_rank,data=ExpressScan_Female)) #CD66b
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD68_TissueCount_rank+PlaquesizeCD68_rank,data=ExpressScan_Female)) #CD68
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_SMA_TissueCount_rank+PlaquesizeSMA_rank,data=ExpressScan_Female)) #SMA
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_HE_TissueCount_rank+PlaquesizeHE_rank,data=ExpressScan_Female)) #HE
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_EVG_Tissue_rank+PlaquesizeEVG_rank,data=ExpressScan_Female)) #EVG
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+PlaquesizeGlycc_rank,data=ExpressScan_Female)) #GLYCC
+```
+### Preparation for Model 3 - Female
+Determining which baseline variables are associated with the plaque characteristics
+```{r Female: Association baseline variables, preparation}
+continuous_variables = c("Age", "diastoli", "systolic", "GFR_MDRD","ORdate_epoch","TC_final_LN", "LDL_final_LN", "HDL_final_LN", "TG_final_LN", "BMI_LN")
+categorical_variables <- c("Hospital", "DiabetesStatus", "SmokerCurrent", "Hypertension.selfreport", "risk614","Med.Statin.LLD", "Hypertension.drugs","Med.all.antiplatelet", "Med.anticoagulants", "CAD_history", "PAOD", "Peripheral.interv", "StrokeTIA_history", "Stenosis_ipsilateral", "stenosis_con_bin","indexsymptoms_latest_4g")
+plaque_vars <-c("Total_CD34_TissueCount_rank","Total_CD66b_TissueCount_rank","Total_CD68_TissueCount_rank","Total_SMA_TissueCount_rank","Total_HE_TissueCount_rank"   ,"Total_EVG_Tissue_rank","Total_GLYCC_Tissue_rank")
+
+p.value <-c("p.value")
+estimate <-c("estimate")
+```
+Female subset: Continuous variables
+```{r Female: Continuous variables, warnings = FALSE, include = TRUE}
+plaque_vars <-c("Total_CD34_TissueCount_rank","Total_CD66b_TissueCount_rank","Total_CD68_TissueCount_rank","Total_SMA_TissueCount_rank","Total_HE_TissueCount_rank","Total_EVG_Tissue_rank","Total_GLYCC_Tissue_rank")
+
+### ORdate_epoch
+Association_ORdate_epoch <-lapply(ExpressScan_Female[plaque_vars], function (x) cor.test(ExpressScan_Female$ORdate_epoch, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_ORdate_epoch, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_ORdate_epoch, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+#Use this to see the variable names of the continuous variables while extracting the Spearman Rho's and P-value's
+pvalue_markers <- unlist(lapply(Association_ORdate_epoch, function(e) {unlist(e[p.value])}))
+estimate_markers <- unlist(lapply(Association_ORdate_epoch, function(e) {unlist(e[estimate])}))
+pvalue_markers
+estimate_markers
+
+### Age
+Association_Age <-lapply(ExpressScan_Female[plaque_vars], function (x) cor.test(ExpressScan_Female$Age, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_Age, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_Age, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### systolic
+Association_systolic <-lapply(ExpressScan_Female[plaque_vars], function (x) cor.test(ExpressScan_Female$systolic, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_systolic, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_systolic, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### diastoli
+Association_diastoli <-lapply(ExpressScan_Female[plaque_vars], function (x) cor.test(ExpressScan_Female$diastoli, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_diastoli, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_diastoli, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+### GFR_MDRD
+Association_GFR_MDRD <-lapply(ExpressScan_Female[plaque_vars], function (x) cor.test(ExpressScan_Female$GFR_MDRD, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_GFR_MDRD, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_GFR_MDRD, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# TC_final_LN
+Association_TC_final_LN <-lapply(ExpressScan_Female[plaque_vars], function (x) cor.test(ExpressScan_Female$TC_final_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_TC_final_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_TC_final_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# LDL_final_LN
+Association_LDL_final_LN <-lapply(ExpressScan_Female[plaque_vars], function (x) cor.test(ExpressScan_Female$LDL_final_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_LDL_final_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_LDL_final_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# HDL_final_LN
+Association_HDL_final_LN <-lapply(ExpressScan_Female[plaque_vars], function (x) cor.test(ExpressScan_Female$HDL_final_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_HDL_final_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_HDL_final_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# TG_final_LN
+Association_TG_final_LN <-lapply(ExpressScan_Female[plaque_vars], function (x) cor.test(ExpressScan_Female$TG_final_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_TG_final_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_TG_final_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# BMI_LN
+Association_BMI_LN <-lapply(ExpressScan_Female[plaque_vars], function (x) cor.test(ExpressScan_Female$BMI_LN, x, method="spearman", exact=FALSE))
+finalfit::p_tidy(unlist(lapply(Association_BMI_LN, function(e) {unlist(e[estimate])})), digits = 3, prefix = NULL) 
+finalfit::p_tidy(unlist(lapply(Association_BMI_LN, function(e) {unlist(e[p.value])})),digits = 3, prefix = NULL)
+
+# I still need to write a better code to extract the variable names, Spearman Rho's and p-values and put these in a dataframe/list which I can save as a .csv or .xlsx file, but this works for now.
+```
+Female subset: Categorical variables
+```{r Female: Categorical variables, warnings = FALSE, include = TRUE}
+dichotomous_vars <- c("Hospital","Hypertension.selfreport","risk614","DiabetesStatus","Med.Statin.LLD","Hypertension.drugs","Med.all.antiplatelet","Med.anticoagulants","CAD_history","PAOD","Peripheral.interv","StrokeTIA_history","stenosis_con_bin")
+group_vars <- c("Stenosis_ipsilateral","SmokerStatus")
+
+# Categorical variables: CD34, t-tests + anova for stenosis ipsilateral and SmokerStatus
+CD34_dich<-lapply(ExpressScan_Female[dichotomous_vars], function(x) t.test(ExpressScan_Female$Total_CD34_TissueCount_rank~x))
+result <- do.call(rbind, lapply(CD34_dich,`[[`, "estimate"))
+pval <- sapply(CD34_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Female$Total_CD34_TissueCount_rank~ExpressScan_Female$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Female$Total_CD34_TissueCount_rank~ExpressScan_Female$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Female$Total_CD34_TissueCount_rank~ExpressScan_Female$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Female$Total_CD34_TissueCount_rank~ExpressScan_Female$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: CD66b, t-tests + anova for stenosis ipsilateral and SmokerStatus
+CD66b_dich<-lapply(ExpressScan_Female[dichotomous_vars], function(x) t.test(ExpressScan_Female$Total_CD66b_TissueCount_rank~x))
+result <- do.call(rbind, lapply(CD66b_dich,`[[`, "estimate"))
+pval <- sapply(CD66b_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Female$Total_CD66b_TissueCount_rank~ExpressScan_Female$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Female$Total_CD66b_TissueCount_rank~ExpressScan_Female$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Female$Total_CD66b_TissueCount_rank~ExpressScan_Female$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Female$Total_CD66b_TissueCount_rank~ExpressScan_Female$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: CD68, t-tests + anova for ipsilateral and SmokerStatus
+CD68_dich<-lapply(ExpressScan_Female[dichotomous_vars], function(x) t.test(ExpressScan_Female$Total_CD68_TissueCount_rank~x))
+result <- do.call(rbind, lapply(CD68_dich,`[[`, "estimate"))
+pval <- sapply(CD68_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Female$Total_CD68_TissueCount_rank~ExpressScan_Female$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Female$Total_CD68_TissueCount_rank~ExpressScan_Female$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Female$Total_CD68_TissueCount_rank~ExpressScan_Female$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Female$Total_CD68_TissueCount_rank~ExpressScan_Female$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: SMA, t-tests + anova for ipsilateral and SmokerStatus
+SMA_dich<-lapply(ExpressScan_Female[dichotomous_vars], function(x) t.test(ExpressScan_Female$Total_SMA_TissueCount_rank~x))
+result <- do.call(rbind, lapply(SMA_dich,`[[`, "estimate"))
+pval <- sapply(SMA_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Female$Total_SMA_TissueCount_rank~ExpressScan_Female$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Female$Total_SMA_TissueCount_rank~ExpressScan_Female$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Female$Total_SMA_TissueCount_rank~ExpressScan_Female$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Female$Total_SMA_TissueCount_rank~ExpressScan_Female$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: HE, t-tests + anova for stenosis ipsilateral and SmokerStatus
+HE_dich<-lapply(ExpressScan_Female[dichotomous_vars], function(x) t.test(ExpressScan_Female$Total_HE_TissueCount_rank~x))
+result <- do.call(rbind, lapply(HE_dich,`[[`, "estimate"))
+pval <- sapply(HE_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Female$Total_HE_TissueCount_rank~ExpressScan_Female$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Female$Total_HE_TissueCount_rank~ExpressScan_Female$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Female$Total_HE_TissueCount_rank~ExpressScan_Female$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Female$Total_HE_TissueCount_rank~ExpressScan_Female$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: EVG, t-tests + anova for stenosis ipsilateral and SmokerStatus
+EVG_dich<-lapply(ExpressScan_Female[dichotomous_vars], function(x) t.test(ExpressScan_Female$Total_EVG_Tissue_rank~x))
+result <- do.call(rbind, lapply(EVG_dich,`[[`, "estimate"))
+pval <- sapply(EVG_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+summary(aov(ExpressScan_Female$Total_EVG_Tissue_rank~ExpressScan_Female$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Female$Total_EVG_Tissue_rank~ExpressScan_Female$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Female$Total_EVG_Tissue_rank~ExpressScan_Female$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Female$Total_EVG_Tissue_rank~ExpressScan_Female$SmokerStatus), "means") #means SmokerStatus
+
+# Categorical variables: GLYCC, t-tests + anova for ipsilateral and SmokerStatus
+GLYCC_dich<-lapply(ExpressScan_Female[dichotomous_vars], function(x) t.test(ExpressScan_Female$Total_GLYCC_Tissue_rank~x))
+result <- do.call(rbind, lapply(GLYCC_dich,`[[`, "estimate"))
+pval <- sapply(GLYCC_dich, `[[`, "p.value")
+result <- cbind(result, p.value = pval)
+round(result,2)
+#round(result[,1:2],3)
+#round(result[,3],4)
+
+
+summary(aov(ExpressScan_Female$Total_GLYCC_Tissue_rank~ExpressScan_Female$Stenosis_ipsilateral)) #p-value Stenosis_ipsilateral
+model.tables(aov(ExpressScan_Female$Total_GLYCC_Tissue_rank~ExpressScan_Female$Stenosis_ipsilateral), "means") #means Stenosis_ipsilateral
+summary(aov(ExpressScan_Female$Total_GLYCC_Tissue_rank~ExpressScan_Female$SmokerStatus)) #p-value SmokerStatus
+model.tables(aov(ExpressScan_Female$Total_GLYCC_Tissue_rank~ExpressScan_Female$SmokerStatus), "means") #means SmokerStatus
+
+# I still need to write a better code to extract the variable names and p-values and put these in a dataframe/list which I can save as a .csv or .xlsx file  but this works for now.
+```
+Female subset: Association of baseline characteristics with outcome (MAjor Cardiovascular Events (MACE) during follow-up)
+```{r Female: Identifying possible confounders, warnings = FALSE, include = TRUE}
+# Creating univariate formulas
+univ_formulas <- sapply(c("Hospital","ORdate_epoch", "Age","Hypertension.selfreport","systolic","diastoli","DiabetesStatus","TC_final_LN", "LDL_final", "HDL_final_LN", "TG_final_LN","risk614","Med.Statin.LLD","Hypertension.drugs","Med.all.antiplatelet","Med.anticoagulants","BMI_LN","GFR_MDRD","SmokerStatus","CAD_history","StrokeTIA_history","PAOD","Peripheral.interv","indexsymptoms_latest_4g","Stenosis_ipsilateral","stenosis_con_bin", "SourceCD34", "SourceCD68","SourceSMA","SourceHE","SourceEVG"),function(x)as.formula(paste('Surv(ep_major_t_3years,epmajor.3years)~',x)))
+
+# Making a list of the univariate baseline characteristic models
+univ_models <- lapply(univ_formulas, function(x){coxph(x,data=ExpressScan_Female)})
+univ_models
+
+# The following baseline variables are univariately associated with MACE with a p-value of <0.10: Hospital, ORdate_epoch, Hypertension.selfreport, DiabetesStatus, TC_final_LN, HDL_final_LN, Hypertension.drugs, Med.anticoagulants, BMI_LN, GFR_MDRD, CAD_history, Peripheral.interv, stenosis_con_bin
+
+cat("Preparation is done.\n")
+```
+## Model 3 - Female 
+In this model we correct for _Plaquesize_ + any other possible _confounders_ (which are, baseline characteristics that are associated with MACE (p<0.1) and with the plaque characteristic (p<0.1)).
+Here we use the inverse-rank normalized data - visually this is more normally distributed.
+Based on the outcome of the preparation, we no can select the confounders for every plaque characteristic
+CD34: _PlaquesizeCD34_, _Hospital_, _ORdate_epoch_, _Hypertension.selfreport_, _TC_final_LN_, _BMI_LN_
+CD66b: _PlaquesizeCD66b_, _Hospital_, _TC_final_LN_, _HDL_final_LN_, _stenosis_con_bin_
+CD68: _PlaquesizeCD68_, _Hospital_, _ORdate_epoch_, _TC_final_LN_,  _HDL_final_LN_, _BMI_LN_, _DiabetesStatus_, _stenosis_con_bin_
+SMA: _PlaquesizeSMA_, _ORdate_epoch_, _BMI_LN_, _stenosis_con_bin_
+HE: _PlaquesizeHE_, _ORdate_epoch_, _Hypertension.drugs_, _stenosis_con_bin_
+EVG: _PlaquesizeEVG_, _Hospital_, _BMI_LN_, _GFR_MDRD_, _Hypertension.drugs_, _stenosis_con_bin_
+GLYCC: _PlaquesizeGlycc_, _Hospital_, _ORdate_epoch_, _Hypertension.selfreport_ _Hypertension.drugs_
+
+```{r Female: Model 3: MV incl plaquesize/confounders,}
+# CD34
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD34_TissueCount_rank + PlaquesizeCD34_rank + Hospital + ORdate_epoch + Hypertension.selfreport + TC_final_LN + BMI_LN, data=ExpressScan_Female))
+# CD66b
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD66b_TissueCount_rank + PlaquesizeCD66b_rank + Hospital + TC_final_LN + HDL_final_LN + stenosis_con_bin, data=ExpressScan_Female))
+# CD68
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_CD68_TissueCount_rank + PlaquesizeCD68_rank + Hospital + ORdate_epoch + TC_final_LN + HDL_final_LN + BMI_LN + DiabetesStatus + stenosis_con_bin, data=ExpressScan_Female))
+# SMA
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_SMA_TissueCount_rank + PlaquesizeSMA_rank + ORdate_epoch + BMI_LN + stenosis_con_bin, data=ExpressScan_Female))
+# HE
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_HE_TissueCount_rank + PlaquesizeHE_rank + ORdate_epoch + Hypertension.drugs + stenosis_con_bin, data=ExpressScan_Female))
+# EVG
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_EVG_Tissue_rank + PlaquesizeEVG_rank + Hospital + BMI_LN + GFR_MDRD + Hypertension.drugs + stenosis_con_bin, data=ExpressScan_Female))
+# Glycophorin C
+summary(coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank + PlaquesizeGlycc_rank + ORdate_epoch + Hospital + Hypertension.drugs + Hypertension.selfreport, data=ExpressScan_Female))
+```
+
+```{r}
+check <- glm(Gender ~ Total_CD34_TissueCount_rank + PlaquesizeCD34_rank, family = binomial, data=ExpressScan) # not different between gender
+summary(check) 
+check <- glm(Gender~Total_CD66b_TissueCount_rank+ PlaquesizeCD66b_rank, family = binomial, data=ExpressScan) # significantly different between gender
+summary(check) 
+check <- glm(Gender~Total_CD68_TissueCount_rank+ PlaquesizeCD68_rank, family = binomial, data=ExpressScan) # not different between gender
+summary(check) 
+check <- glm(Gender~Total_SMA_TissueCount_rank+ PlaquesizeSMA_rank, family = binomial, data=ExpressScan) # not different between gender
+summary(check) 
+check <- glm(Gender~Total_HE_TissueCount_rank+ PlaquesizeHE_rank, family = binomial, data=ExpressScan)  # significantly different between gender
+summary(check) 
+check <- glm(Gender~Total_EVG_Tissue_rank+ PlaquesizeEVG_rank, family = binomial, data=ExpressScan) # not different between gender
+summary(check) 
+check <- glm(Gender~Total_GLYCC_Tissue_rank+ PlaquesizeGlycc_rank, family = binomial, data=ExpressScan)  # significantly different between gender
+summary(check) 
+
+str(ExpressScan$Gender)
+
+ExpressScan$Gender <- factor(ExpressScan$Gender, levels = c("0", "1"), labels = c("Female", "Male"))
+summary(ExpressScan$Gender)
+
+p1 <- ggpubr::ggboxplot(ExpressScan, 
+                  x = "Gender",
+                  y = "Total_CD66b_TissueCount_rank", 
+                  # xlab = "Group",
+                  ylab = "Count of CD66b+ objects (inverse-rank transformed)",
+                  xlab = FALSE,
+                  color = "Gender",
+                  palette = "npg",
+                  names = c("Female, Male"),
+                  add = "jitter") +
+                  theme(legend.position="right")
+p1
+
+#tiff("CD66b_Gender.tiff", units="in", width=5, height=5, res=1200)
+ggpubr::ggboxplot(ExpressScan %>% filter(!is.na(Gender)),
+                  x = c("Gender"),
+                  y = "Total_CD66b_TissueCount_rank", 
+                  # xlab = "Group",
+                  ylab = "Count of CD66b+ objects (inverse-rank transformed)",
+                  xlab = FALSE,
+                  color = "Gender",
+                  palette = "npg",
+                  names = c("Female, Male"),
+                  add = "jitter") + theme(legend.position="right") #+ stat_compare_means(method = "kruskal") 
+
+#dev.off() 
+
+
+p2 <- ggpubr::gghistogram(ExpressScan, "Total_CD66b_TissueCount_rank", 
+                    # y = "..count..", 
+                    color = "white",
+                    fill = "Gender",
+                    palette = c("#1290D9","#DB003F"), 
+                    # add = "mean", 
+                    # rug = TRUE,
+                    # add.params =  list(color = "black", linetype = 2), 
+                    title = " ",
+                    xlab = "Number of CD66b+ objects (inverse rank normalization)", 
+                    ggtheme = theme_minimal())
+p2
+
+#tiff("HE_Gender.tiff", units="in", width=5, height=5, res=1200)
+ggpubr::ggboxplot(ExpressScan %>% filter(!is.na(Gender)),
+                  x = c("Gender"),
+                  y = "Total_HE_TissueCount_rank", 
+                  # xlab = "Group",
+                  ylab = "Count of HE+ objects (inverse-rank transformed)",
+                  xlab = FALSE,
+                  color = "Gender",
+                  palette = "npg",
+                  names = c("Female, Male"),
+                  add = "jitter") + theme(legend.position="right") #+ stat_compare_means(method = "kruskal") 
+
+#dev.off() 
+
+
+        
+
+#tiff("GLYC_Gender.tiff", units="in", width=5, height=5, res=1200)
+ggpubr::ggboxplot(ExpressScan %>% filter(!is.na(Gender)),
+                  x = c("Gender"),
+                  y = "Total_GLYCC_Tissue_rank", 
+                  # xlab = "Group",
+                  ylab = "Quantified Glycophorin C (inverse-rank transformed)",
+                  xlab = FALSE,
+                  color = "Gender",
+                  palette = "npg",
+                  names = c("Female, Male"),
+                  add = "jitter") + theme(legend.position="right") #+ stat_compare_means(method = "kruskal") 
+
+#dev.off()       
+
+
+
+p1 <- ggpubr::ggboxplot(ExpressScan, 
+                  x = "Gender",
+                  y = "Total_GLYCC_Tissue_rank", 
+                  # xlab = "Group",
+                  ylab = "Total_GLYCC_Tissue_rank ",
+                  color = "Gender",
+                  palette = "npg",
+                  add = "jitter") + stat_compare_means(method = "kruskal") +
+                  theme(legend.position="right")
+p1
+
+p1 <- ggpubr::ggboxplot(ExpressScan, 
+                  x = "AsymptSympt2G",
+                  y = "Total_GLYCC_Tissue_rank", 
+                  # xlab = "Group",
+                  ylab = "Total_GLYCC_Tissue_rank ",
+                  color = "AsymptSympt2G",
+                  palette = "npg",
+                  add = "jitter") + stat_compare_means(method = "kruskal") +
+                  theme(legend.position="right")
+p1
+```
+```{r}
+ExpressScan_Male$quart.PlaquesizeEVG_rank<-cut_number(ExpressScan_Male$PlaquesizeEVG_rank, n = 4, labels = 1:4)
+ExpressScan_Female$quart.PlaquesizeEVG_rank<-cut_number(ExpressScan_Female$PlaquesizeEVG_rank, n = 4, labels = 1:4)
+
+p1 <- ggpubr::ggboxplot(ExpressScan, 
+                  x = "quart.PlaquesizeEVG_rank",
+                  y = "Total_EVG_Tissue_rank", 
+                  # xlab = "Group",
+                  ylab = "Total_EVG_Tissue_rank ",
+                  color = "quart.PlaquesizeEVG_rank",
+                  palette = "npg",
+                  add = "jitter") + stat_compare_means(method = "kruskal") +
+                  theme(legend.position="right")
+p1
+
+p1 <- ggpubr::ggboxplot(ExpressScan_Male, 
+                  x = "quart.PlaquesizeEVG_rank",
+                  y = "Total_EVG_Tissue_rank", 
+                  # xlab = "Group",
+                  ylab = "Total_EVG_Tissue_rank ",
+                  color = "quart.PlaquesizeEVG_rank",
+                  palette = "npg",
+                  add = "jitter") + stat_compare_means(method = "kruskal") +
+                  theme(legend.position="right")
+p1
+
+p1 <- ggpubr::ggboxplot(ExpressScan_Female, 
+                  x = "quart.PlaquesizeEVG_rank",
+                  y = "Total_EVG_Tissue_rank", 
+                  # xlab = "Group",
+                  ylab = "Total_EVG_Tissue_rank ",
+                  color = "quart.PlaquesizeEVG_rank",
+                  palette = "npg",
+                  add = "jitter") + stat_compare_means(method = "kruskal") +
+                  theme(legend.position="right")
+p1
+
+p1 <- ggpubr::ggscatter(ExpressScan, 
+                        x = "Total_EVG_Tissue_rank", 
+                        y = "Total_CD68_TissueCount_rank",
+                        color = "#1290D9",
+                        # fill = "Gender",
+                        # palette = c("#1290D9", "#DB003F"),
+                        add = "reg.line",
+                        add.params =  list(color = "black", linetype = 2),
+                        cor.coef = TRUE, cor.method = "spearman",
+                        xlab = "Total_EVG_Tissue_rank",
+                        ylab = "Total_CD68_TissueCount_rank",
+                        title = "",
+                        ggtheme = theme_minimal())
+p1
+
+```
+
+
+
+
