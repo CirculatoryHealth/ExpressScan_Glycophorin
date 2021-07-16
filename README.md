@@ -4,7 +4,7 @@ Glycophorin C in atherosclerotic plaque is associated with major adverse cardiov
 
 ### This readme
 This readme accompanies the paper "Glycophorin C in atherosclerotic plaque is associated with major adverse cardiovascular events after carotid endarterectomy." by J.M. Mekke _et al_. 
-
+--------------
 ### Abstract.
 **Introduction**<br/>
 Histological assessment studies have identified the presence of intraplaque hemorrhage (IPH) as an indicator of plaque instability and resulting ischemic cerebral sequelae. Although the presence of IPH has been studied extensively in relation to neurological symptoms preceding carotid endarterectomy (CEA) or as a predictor for postoperative risk of major adverse cardiovascular events (MACE), the degree of IPH has not been studied before. Glycophorin, an erythrocyte-specific protein, has been suggested as a marker for the degree of previous hemorrhages in atherosclerotic plaque since erythrocytes are prominently present in IPH. We hypothesized that quantified plaque glycophorin C, as a proxy for the degree of IPH, is associated with destabilizing plaque characteristics, preprocedural symptoms, and increased postoperative risk for MACE. 
@@ -20,12 +20,12 @@ Quantified glycophorin C, as a proxy for the degree of IPH, was independently as
 
 **Keywords**<br/>
 Atherosclerosis, Carotid endarterectomy, Glycophorin, Intraplaque hemorrhage, Major adverse cardiovascular events
-
+--------------
 ### Acknowledgements
 This work was supported by the Netherlands Cardiovascular Research Initiative: an initiative with support of the Dutch Heart Foundation (CVON-GENIUS-2 to GP and SWvdL). We are thankful for the support of the ERA-CVD program ‘druggable-MI-targets’ (grant number: 01KL1802), the EU H2020 TO_AITION (grant number: 848146), EU H2020 Taxinomisis (grant number 755320 JM, GP, GJB DdK), and the Leducq Fondation ‘PlaqOmics’.
 
 Plaque samples are derived from carotid endarterectomies as part of the [Athero-Express Biobank Study](http:www/atheroexpress.nl) which is an ongoing study in the UMC Utrecht.
-
+--------------
 #### Creative Commons BY-NC-ND 4.0
 ##### Copyright (c) 1979-2021 Sander W. van der Laan | s.w.vanderlaan [at] gmail [dot] com.
 
@@ -43,9 +43,3 @@ Under the following terms:
 Notices: 
 You do not have to comply with the license for elements of the material in the public domain or where your use is permitted by an applicable exception or limitation.
 No warranties are given. The license may not give you all of the permissions necessary for your intended use. For example, other rights such as publicity, privacy, or moral rights may limit how you use the material.
-
-
-
-
-
-
