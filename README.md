@@ -1,4 +1,7 @@
-Glycophorin C in atherosclerotic plaque is associated with major adverse cardiovascular events after carotid endarterectomy.![image](https://user-images.githubusercontent.com/64079378/125973598-62dc8203-3622-4a6b-bb87-6bee99382465.png)
+Glycophorin C in atherosclerotic plaque is associated with major adverse cardiovascular events after carotid endarterectomy.
+
+This readme
+This readme accompanies the paper "Glycophorin C in atherosclerotic plaque is associated with major adverse cardiovascular events after carotid endarterectomy." by J.M. Mekke _et al_. 
 
 Abstract.
 Introduction
@@ -14,4 +17,6 @@ Conclusion
 Quantified glycophorin C, as a proxy for the degree of IPH, was independently associated with the presence of IPH, symptomatic preprocedural symptoms, and with an increased three-year postoperative risk of MACE. These findings indicate that quantified plaque glycophorin C can be considered as a marker for identifying male patients with a high residual risk for secondary MACE after CEA. 
 
 Keywords
-Atherosclerosis, Carotid endarterectomy, Glycophorin, Intraplaque hemorrhage, Major adverse cardiovascular events![image](https://user-images.githubusercontent.com/64079378/125973692-d0561279-bf66-42c3-8e7e-39c1e1193309.png)
+Atherosclerosis, Carotid endarterectomy, Glycophorin, Intraplaque hemorrhage, Major adverse cardiovascular events
+
+
