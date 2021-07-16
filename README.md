@@ -4,6 +4,7 @@ Glycophorin C in atherosclerotic plaque is associated with major adverse cardiov
 
 ### This readme
 This readme accompanies the paper "Glycophorin C in atherosclerotic plaque is associated with major adverse cardiovascular events after carotid endarterectomy." by J.M. Mekke _et al_. 
+
 --------------
 ### Abstract.
 **Introduction**<br/>
@@ -20,11 +21,14 @@ Quantified glycophorin C, as a proxy for the degree of IPH, was independently as
 
 **Keywords**<br/>
 Atherosclerosis, Carotid endarterectomy, Glycophorin, Intraplaque hemorrhage, Major adverse cardiovascular events
+
 --------------
+
 ### Acknowledgements
 This work was supported by the Netherlands Cardiovascular Research Initiative: an initiative with support of the Dutch Heart Foundation (CVON-GENIUS-2 to GP and SWvdL). We are thankful for the support of the ERA-CVD program ‘druggable-MI-targets’ (grant number: 01KL1802), the EU H2020 TO_AITION (grant number: 848146), EU H2020 Taxinomisis (grant number 755320 JM, GP, GJB DdK), and the Leducq Fondation ‘PlaqOmics’.
 
 Plaque samples are derived from carotid endarterectomies as part of the [Athero-Express Biobank Study](http:www/atheroexpress.nl) which is an ongoing study in the UMC Utrecht.
+
 --------------
 #### Creative Commons BY-NC-ND 4.0
 ##### Copyright (c) 1979-2021 Sander W. van der Laan | s.w.vanderlaan [at] gmail [dot] com.
