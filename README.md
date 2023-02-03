@@ -1,26 +1,25 @@
-Glycophorin C in atherosclerotic plaque is associated with major adverse cardiovascular events after carotid endarterectomy.
+Glycophorin C in carotid atherosclerotic plaque reflects intraplaque hemorrhage and pre-procedural neurological symptoms.
 ===========================================================
 
-
 ### This readme
-This readme accompanies the paper "Glycophorin C in atherosclerotic plaque is associated with major adverse cardiovascular events after carotid endarterectomy." by J.M. Mekke _et al_. 
+This readme accompanies the paper "Glycophorin C in carotid atherosclerotic plaque reflects intraplaque hemorrhage and pre-procedural neurological symptoms." by [J.M. Mekke _et al_](https://doi.org/10.1101/2021.07.15.21260570). 
 
 --------------
 ### Abstract.
 **Introduction**<br/>
-Histological assessment studies have identified the presence of intraplaque hemorrhage (IPH) as an indicator of plaque instability and resulting ischemic cerebral sequelae. Although the presence of IPH has been studied extensively in relation to neurological symptoms preceding carotid endarterectomy (CEA) or as a predictor for postoperative risk of major adverse cardiovascular events (MACE), the degree of IPH has not been studied before. Glycophorin, an erythrocyte-specific protein, has been suggested as a marker for the degree of previous hemorrhages in atherosclerotic plaque since erythrocytes are prominently present in IPH. We hypothesized that quantified plaque glycophorin C, as a proxy for the degree of IPH, is associated with destabilizing plaque characteristics, preprocedural symptoms, and increased postoperative risk for MACE. 
+The accumulation of erythrocyte membranes within an atherosclerotic plaque may contribute to the deposition of free cholesterol and thereby the enlargement of the necrotic core. Erythrocyte membranes can be visualized and quantified in the plaque by immunostaining for the erythrocyte marker glycophorin C. We therefore hypothesized, that glycophorin C is a marker for plaque vulnerability and may therefore reflect intraplaque hemorrhage (IPH), vulnerability of plaques and predict pre-procedural neurological symptoms.
 
 **Methods**<br/>
-We quantified glycophorin C and six other plaque characteristics with the slideToolkit method. We used human atherosclerotic plaque samples from 1971 consecutive asymptomatic and symptomatic (carotid endarterectomy) patients in the Athero-Express Biobank. 
+We quantified glycophorin C in human atherosclerotic plaque samples from 1,819 consecutive asymptomatic and symptomatic patients undergoing carotid endarterectomy from the Athero-Express Biobank with the slideToolKit. 
 
 **Results**<br/>
-The total area of glycophorin C in plaque was larger in individuals with a plaque with IPH compared to individuals with plaque without IPH (p<0.001). Quantified glycophorin C was significantly associated with ipsilateral pre-procedural neurological symptoms (OR:1.27, 95%CI:1.06-1.41, p=0.005). In addition, quantified glycophorin C was independently associated with an increased postoperative risk for MACE (HR:1.31, 95%CI:1.01-1.68, p=0.04). Stratified by sex, quantified glycophorin C was associated with an increased postoperative risk for MACE in male patients (HR:1.50, 95%CI:1.13-1.97, p=0.004), but not in female patients (HR:0.70, 95%CI:0.39-1.27, p=0.23).
+The prevalence of IPH was 62.4%, and the prevalence of pre-procedural neurological symptoms was 87.1%. The percentage glycophorin staining was significantly higher in male patients compared to female patients (median 7.15 (IQR:3.37, 13.41) versus median 4.06 (IQR:1.98, 8.32), p<0.001). Quantified glycophorin C was associated with IPH (OR 1.90; 95% CI 1.63, 2.21; p=<0.001) when corrected for clinical confounders. Glycophorin C was significantly associated with ipsilateral pre-procedural neurological symptoms (OR:1.27, 95%CI:1.06-1.41, p=0.005), and upon sex-stratified analyses, specifically in male patients (OR 1.37; 95%CI 1.12, 1.69; p=0.003), but not in female patients (OR 1.15; 95%CI 0.77, 1.73; p=0.27). Glycophorin was associated with classical features of a vulnerable plaque, such as a larger lipid core (OR 1.85; 95%CI 1.60, 2.15; p<0.001), a higher macrophage burden (OR 1.87; 95%CI 1.63, 2.14; p<0.001), less calcifications (OR 0.81; 95%CI 0.71, 0.91; p<0.001), a lower collagen and SMC content (OR 0.70; 95%CI 0.60, 0.82; p<0.001 and OR 0.60; 95%CI 0.52, 0.68; p<0.001, respectively). There were marked sex differences, in male patients glycophorin was associated with calcifications and collagen (OR 0.75; 95%CI 0.64, 0.87; p<0.001 and OR 0.65; 95%CI 0.53, 0.79; p<0.001, respectively) while these associations were not found in female patients.
 
 **Conclusion**<br/>
-Quantified glycophorin C, as a proxy for the degree of IPH, was independently associated with the presence of IPH, symptomatic preprocedural symptoms, and with an increased three-year postoperative risk of MACE. These findings indicate that quantified plaque glycophorin C can be considered as a marker for identifying male patients with a high residual risk for secondary MACE after CEA. 
+Quantified glycophorin C was independently associated with the presence of IPH, symptomatic preprocedural symptoms in male, and with a more vulnerable plaque composition in both women and men. Which strengthens the hypothesize that plaque glycophorin C is a marker of plaque vulnerability.
 
 **Keywords**<br/>
-Atherosclerosis, Carotid endarterectomy, Glycophorin, Intraplaque hemorrhage, Major adverse cardiovascular events
+Atherosclerosis, Carotid endarterectomy, Glycophorin, Intraplaque hemorrhage, Plaque instability, Sex.
 
 --------------
 
@@ -31,7 +30,7 @@ Plaque samples are derived from carotid endarterectomies as part of the [Athero-
 
 --------------
 #### Creative Commons BY-NC-ND 4.0
-##### Copyright (c) 1979-2021 Sander W. van der Laan | s.w.vanderlaan [at] gmail [dot] com.
+##### Copyright (c) 1979-2023 Sander W. van der Laan | s.w.vanderlaan [at] gmail [dot] com.
 
 This is a human-readable summary of (and not a substitute for) the [license](LICENSE). 
 
