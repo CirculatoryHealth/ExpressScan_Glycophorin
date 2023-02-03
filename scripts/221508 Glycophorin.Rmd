@@ -1,0 +1,1367 @@
+---
+title: "Express Scan - Glycophorin C in plaque"
+author: "[Joost. M. Mekke, MD]
+date: "'r. Sys.Date()'"
+output: 
+  html_notebook: 
+    cache: yes
+    code_folding: hide
+    collapse: yes
+    df_print: paged
+    fig.align: center
+    fig_caption: yes
+    fig_height: 7
+    fig_retina: 2
+    fig_width: 7
+    hightlight: tango
+    theme: lumen
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+mainfont: Arial
+subtitle: An 'Express Scan' project
+editor_options:
+  chunk_output_type: inline
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls(all = TRUE)) # Clear workspace
+```
+# Initialise Project
+```{r load_project, warning = FALSE, message = FALSE, include=FALSE}
+setwd("~/surfdrive/2. Projecten/2. Glycophorin manuscript/_Manuscript Glycophorin revised/")
+library(ProjectTemplate); load.project(echo = FALSE)
+```
+# Baseline Table
+```{r Baseline Table}
+ExpressScan_Baseline <- ExpressScan %>%dplyr::select(Age,Gender,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,Stenosis_ipsilateral,stenosis_con_bin,Symptoms.4g,PercentageSTAIN,IPH.bin)
+
+categorical <- c("CAD_history","DiabetesStatus","StrokeTIA_history")
+ExpressScan_Baseline <-dummy_cols(ExpressScan_Baseline, select_columns=categorical,remove_first_dummy=TRUE)
+colnames(ExpressScan_Baseline)
+
+ExpressScan_Baseline$CAD_history_1 <- ExpressScan_Baseline[,c(27)]
+ExpressScan_Baseline$StrokeTIA_history_1 <- ExpressScan_Baseline[,c(30)]
+
+ExpressScan_Baseline <- ExpressScan_Baseline %>%dplyr::select(Age,Gender,systolic,diastoli,Hypertension.selfreport,DiabetesStatus_Diabetes,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history_1,PAOD,Peripheral.interv,StrokeTIA_history_1,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,Stenosis_ipsilateral,stenosis_con_bin,Symptoms.4g,PercentageSTAIN,IPH.bin)
+
+ExpressScan_Baseline$Gender <- revalue(ExpressScan_Baseline$Gender, c("female"="Female","male"="Male"))
+ExpressScan_Baseline$Gender <- factor(ExpressScan_Baseline$Gender, levels=(c("Male","Female")))
+ExpressScan_Baseline$Symptoms.4g <- revalue(ExpressScan_Baseline$Symptoms.4g, c("asymptomatic"="Asymptomatic","ocular"="Ocular","TIA"="TIA", "stroke"="Stroke"))
+
+set_gtsummary_theme(theme_gtsummary_compact())
+#reset_gtsummary_theme()
+
+# If saving the table as a image is needed.
+# library(webshot)
+# webshot::install_phantomjs()
+
+ExpressScan_Baseline %>% tbl_summary(
+  by=IPH.bin,
+  statistic = list(c("TC_final", "LDL_final", "HDL_final","TG_final","BMI") ~ "{median} ({p25}, {p75})",c("Age", "systolic", "diastoli","GFR_MDRD")~ "{mean} ({sd})",all_categorical() ~ "{n}/{N} ({p}%)"),
+  digits = list(c("Age", "systolic", "diastoli")~0,c("BMI","GFR_MDRD")~1,c("TC_final", "LDL_final", "HDL_final","TG_final","PercentageSTAIN")~2),
+  label = list(Age~"Age - years", systolic ~ "Systolic BP – mmHg", diastoli ~"Diastolic BP – mmHg", Hypertension.selfreport~"Hypertension", DiabetesStatus_Diabetes~"Diabetes mellitus",risk614~"Hypercholesterolemia",TC_final~"Total cholesterol – mmol/L",LDL_final~"LDL – mmol/L", HDL_final~"HDL – mmol/L",TG_final~"Triglycerides – mmol/L", BMI~"Body Mass Index – kg/m2",GFR_MDRD~"eGFR – mL/min/1.73/m2",SmokerStatus~"Smoking Status",CAD_history_1~"History of CAD",PAOD~"History of PAOD",Peripheral.interv~"History of Peripheral interventions",StrokeTIA_history_1~"History of TIA/Stroke",Hypertension.drugs~"Use of antihypertensive drugs",Med.Statin.LLD~"Use of statins",Med.all.antiplatelet~"Use of antiplatelet drugs",Med.anticoagulants~"Use of oral anticoagulants",Stenosis_ipsilateral~"Ipsilateral carotid stenosis",stenosis_con_bin~"Contralateral carotid stenosis",Symptoms.4g~"Pre-procedural neurological symptoms",PercentageSTAIN~"Percentage glycophorin stain"),
+  missing= "no") %>%
+  add_overall() %>%
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 2)) %>%
+     modify_header(label ~ "**Variable**") %>%
+  modify_spanning_header(c("stat_1", "stat_2") ~ "**Gender**") %>%
+    modify_caption("**Table 1. Patient Characteristics**")  %>%
+  bold_labels() %>% 
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "BaselineTable1.docx")
+```
+# Adj.Glycophorin ~ Plaquesize + baseline characteristics associations
+This still takes a manual step to create a table, I have copied and pasted all the adj. beta's with 95%CI from the baseline characteristics in one table. (Note that this table is only used to find potential confounders for multivariable regression analysis)
+```{r full cohort Baseline characteritics}
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Age, data=ExpressScan) %>% tbl_regression() 
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Gender, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ TC_final, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ LDL_final, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Hospital, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ SmokerCurrent, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ SmokerStatus, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Med.all.antiplatelet, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Med.anticoagulants, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ CAD_history, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ PAOD, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ BMI, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ diastoli, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ systolic, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ GFR_MDRD, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ HDL_final, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ TG_final, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ DiabetesStatus, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Hypertension.selfreport, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Med.Statin.LLD, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Hypertension.drugs, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Peripheral.interv, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ StrokeTIA_history, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ stenosis_con_bin, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Symptoms.4g, data=ExpressScan) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Stenosis_ipsilateral, data=ExpressScan) %>% tbl_regression() # Note to self: tested this with `Stenosis_ipsilateral_70-99%` and `Stenosis_ipsilateral_50-70%` which gives very similar results
+
+# Age, Gender, TC_final, LDL_final, Hospital, SmokerCurrent, SmokerStatus, Med.all.antiplatelet, Med.anticoagulants, CAD_history, PAOD are associated with Glycophorin adjusted for Plaquesize  p<0.05
+# And Stenosis_ipsilateral p <0.10
+```
+# Univariable and Multivariable associations with MACE 3years (baseline + Glycophorin)
+```{r full cohort UV and MV MACE 3y}
+ExpressScan$epmajor.3years<-as.numeric(ExpressScan$epmajor.3years)
+ExpressScan %>%
+  select(ep_major_t_3years, epmajor.3years,Age,Gender,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,Stenosis_ipsilateral,stenosis_con_bin,Symptoms.4g) %>%
+  tbl_uvregression(
+    method = survival::coxph,
+    y = Surv(ep_major_t_3years, epmajor.3years),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "BaselineMACE.docx")
+
+# Age, Diabetes, TC_final, LDL_final, HDL_final, GFR_MDRD, SmokerStatus, CAD_history, PAOD, Peripheral.interv, Hypertension.drugs, Med.all.antiplatelet, Med.anticoagulants, stenosis_con_bin are all associated with MACE
+
+# Glycophorin C ~ MACE (adj for plaquesize)
+GLYCC <- coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "UV_Glycophorin_MACE.docx")
+
+# Glycophorin C ~ MACE (adj for plaquesize + confounders)
+GLYCC <- coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final+LDL_final+SmokerStatus+Med.all.antiplatelet+Med.anticoagulants+CAD_history+PAOD,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",Age~"Age - years",TC_final~"Total cholesterol – mmol/L",LDL_final~"LDL – mmol/L",SmokerStatus~"Smoking Status",Med.all.antiplatelet~"Use of antiplatelet drugs",Med.anticoagulants~"Use of oral anticoagulants",CAD_history~"History of CAD",PAOD~"History of PAOD"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MV_Glycophorin_MACE.docx")
+```
+# Univariable and Multivariable associations with symptoms (Asymptomatic versus symptomatic) (baseline + Glycophorin)
+```{r full cohort UV and MV symptoms}
+# The variable Stenosis_ipsilateral seems to give a warning, probably due to the low number of patients in the 0-50% group, see below.
+ExpressScan %>%
+  tbl_cross(
+    row = AsymptSympt2G,
+    col = Stenosis_ipsilateral,
+    percent = "cell"
+  ) %>%
+  add_p()
+
+# To fix this we made two dummy variables
+ExpressScan <-dummy_cols(ExpressScan, select_columns=c("Stenosis_ipsilateral"),remove_first_dummy=TRUE)
+ExpressScan %>% select(`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`)
+
+# Creating the Univariable associations baseline characteristics with symptoms table
+ExpressScan %>%
+  select(AsymptSympt2G,Hospital,Age,Gender,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`,stenosis_con_bin) %>%
+  tbl_uvregression(
+    method = glm,
+    y = AsymptSympt2G,
+    method.args = list(family = binomial),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "BaselineSymptoms.docx")
+
+# Glycophorin C ~ symptoms (adj for plaquesize)
+GLYCC <- glm(AsymptSympt2G~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "UV_Glycophorin_Symptoms.docx")
+
+# Glycophorin C ~ symptoms (adj for plaquesize + confounders)
+GLYCC <- glm(AsymptSympt2G~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+Gender+Hospital+SmokerStatus+CAD_history+PAOD+Med.all.antiplatelet+`Stenosis_ipsilateral_70-99%`, family="binomial", data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",Age~"Age - years",Gender~"Gender",SmokerStatus~"Smoking Status",Med.all.antiplatelet~"Use of antiplatelet drugs",CAD_history~"History of CAD",PAOD~"History of PAOD",`Stenosis_ipsilateral_70-99%`~"Carotid stenosis 70~99%"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MV_Glycophorin_Symptoms.docx")
+```
+# Univariable and Multivariable associations with IPH.bin (baseline + Glycophorin)
+```{r full cohort UV and MV IPH}
+# Creating the Univariable associations baseline characteristics with symptoms table
+ExpressScan %>%
+  select(IPH.bin,Hospital,Age,Gender,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,Stenosis_ipsilateral,stenosis_con_bin,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`) %>%
+  tbl_uvregression(
+    method = glm,
+    y = IPH.bin,
+    method.args = list(family = binomial),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "BaselineIPH.docx")
+
+# Glycophorin C ~ IPH.bin (adj for plaquesize)
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "UV_Glycophorin_IPH.docx")
+
+# Glycophorin C ~ IPH.bin (adj for plaquesize + confounders)
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank+Gender+Hospital+CAD_history, family="binomial", data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",Gender~"Gender",Hospital~"Hospital",CAD_history~"History of CAD"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MV_Glycophorin_IPH.docx")
+```
+# Univariable and Multivariable associations IPH.bin ~ MACE
+```{r full cohort UV and MV IPH-MACE}
+# UV IPH model
+GLYCC <- coxph(Surv(ep_major_t_3years,epmajor.3years)~IPH.bin,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(IPH.bin~"Intraplaque hemorrhage"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "UV_IPH_MACE.docx")
+
+# MV IPH model:
+GLYCC <- coxph(Surv(ep_major_t_3years,epmajor.3years)~IPH.bin+CAD_history,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(IPH.bin~"Intraplaque hemorrhage",CAD_history~"History of CAD"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MV_IPH_MACE.docx")
+```
+# Univariable and Multivariable associations Glycophorin ~ CAD
+```{r full cohort UV and MV CAD 3y}
+ExpressScan$epcoronary.3years <-as.numeric(ExpressScan$epcoronary.3years)
+
+ExpressScan %>%
+  select(ep_coronary_t_3years, epcoronary.3years,Age,Gender,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`,stenosis_con_bin,Symptoms.4g) %>%
+  tbl_uvregression(
+    method = survival::coxph,
+    y = Surv(ep_coronary_t_3years, epcoronary.3years),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "BaselineCAD.docx")
+
+# Glycophorin C ~ CAD (adj for plaquesize)
+GLYCC <- coxph(Surv(ep_coronary_t_3years, epcoronary.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "UV_Glycophorin_CAD.docx")
+
+# Glycophorin C ~ CAD (adj for plaquesize + confounders)
+GLYCC <- coxph(Surv(ep_coronary_t_3years, epcoronary.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+CAD_history+PAOD ,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",Age~"Age - years",CAD_history~"History of CAD",PAOD~"History of PAOD"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() %>% as_flex_table() %>% flextable::save_as_docx(path = "MV_Glycophorin_CAD.docx")
+```
+# Univariable and Multivariable associations Glycophorin ~ Stroke
+```{r full cohort UV and MV stroke 3y}
+ExpressScan$epstroke.3years <-as.numeric(ExpressScan$epstroke.3years)
+
+ExpressScan %>%
+  select(ep_stroke_t_3years, epstroke.3years,Age,Gender,Hospital,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`,stenosis_con_bin,Symptoms.4g) %>%
+  tbl_uvregression(
+    method = survival::coxph,
+    y = Surv(ep_stroke_t_3years, epstroke.3years),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "BaselineStroke.docx")
+
+# Glycophorin C ~ Stroke (adj for plaquesize)
+GLYCC <- coxph(Surv(ep_stroke_t_3years, epstroke.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "UV_Glycophorin_Stroke.docx")
+
+# Glycophorin C ~ Stroke (adj for plaquesize + confounders)
+GLYCC <- coxph(Surv(ep_stroke_t_3years, epstroke.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final+LDL_final+Med.all.antiplatelet+Med.anticoagulants,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",Age~"Age - years",TC_final~"Total cholesterol – mmol/L",LDL_final~"LDL – mmol/L",Med.all.antiplatelet~"Use of antiplatelet drugs",Med.anticoagulants~"Use of oral anticoagulants"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MV_Glycophorin_Stroke.docx")
+```
+# Univariable and Multivariable associations Glycophorin ~ CV death
+```{r full cohort UV and MV CV death 3y}
+ExpressScan$epcvdeath.3years <-as.numeric(ExpressScan$epcvdeath.3years)
+
+ExpressScan %>%
+  select(ep_cvdeath_t_3years, epcvdeath.3years,Age,Gender,Hospital,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`,stenosis_con_bin,Symptoms.4g) %>%
+  tbl_uvregression(
+    method = survival::coxph,
+    y = Surv(ep_cvdeath_t_3years, epcvdeath.3years),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "BaselineCVdeath.docx")
+
+# Glycophorin C ~ CV death (adj for plaquesize)
+GLYCC <- coxph(Surv(ep_cvdeath_t_3years, epcvdeath.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "UV_Glycophorin_CVdeath.docx")
+
+# Glycophorin C ~ CV death (adj for plaquesize + confounders)
+GLYCC <- coxph(Surv(ep_cvdeath_t_3years, epcvdeath.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final+LDL_final+Med.all.antiplatelet+Med.anticoagulants + PAOD + CAD_history,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",Age~"Age - years",TC_final~"Total cholesterol – mmol/L",LDL_final~"LDL – mmol/L",Med.all.antiplatelet~"Use of antiplatelet drugs",Med.anticoagulants~"Use of oral anticoagulants",CAD_history~"History of CAD",PAOD~"History of PAOD"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MV_Glycophorin_CVdeath.docx")
+```
+# Univariable and Multivariable associations Glycophorin ~ 30 day MACE
+```{r full cohort UV and MV MACE 30days}
+ExpressScan$epmajor.30days <-as.numeric(ExpressScan$epmajor.30days)
+
+ExpressScan %>%
+  select(ep_major_t_30days, epmajor.30days,Age,Gender,Hospital,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`,stenosis_con_bin,Symptoms.4g) %>%
+  tbl_uvregression(
+    method = survival::coxph,
+    y = Surv(ep_major_t_30days, epmajor.30days),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "BaselineMACE30d.docx")
+
+# Glycophorin C ~ MACE 30d (adj for plaquesize)
+GLYCC <- coxph(Surv(ep_major_t_30days, epmajor.30days)~Total_GLYCC_Tissue_rank+TotalTissue_rank,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "UV_Glycophorin_MACE30d.docx")
+
+# Glycophorin C ~ CV death (adj for plaquesize + confounders)
+GLYCC <- coxph(Surv(ep_major_t_30days, epmajor.30days)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final+Hospital+CAD_history,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",Age~"Age - years",TC_final~"Total cholesterol – mmol/L",CAD_history~"History of CAD",Hospital~"Hospital"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MV_Glycophorin_MACE30d.docx")
+```
+# Univariable and Multivariable associations Glycophorin ~ 90 day MACE
+```{r full cohort UV and MV MACE 90days}
+ExpressScan$epmajor.90days <-as.numeric(ExpressScan$epmajor.90days)
+
+ExpressScan %>%
+  select(ep_major_t_90days, epmajor.90days,Age,Gender,Hospital,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`,stenosis_con_bin,Symptoms.4g) %>%
+  tbl_uvregression(
+    method = survival::coxph,
+    y = Surv(ep_major_t_90days, epmajor.90days),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "BaselineMACE90d.docx")
+
+# Glycophorin C ~ MACE 90d (adj for plaquesize)
+GLYCC <- coxph(Surv(ep_major_t_90days, epmajor.90days)~Total_GLYCC_Tissue_rank+TotalTissue_rank,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "UV_Glycophorin_MACE90d.docx")
+
+# Glycophorin C ~ CV death (adj for plaquesize + confounders)
+GLYCC <- coxph(Surv(ep_major_t_90days, epmajor.90days)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final+Med.all.antiplatelet+Med.anticoagulants + PAOD + CAD_history,data=ExpressScan)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",Age~"Age - years",TC_final~"Total cholesterol – mmol/L",Med.all.antiplatelet~"Use of antiplatelet drugs",Med.anticoagulants~"Use of oral anticoagulants",CAD_history~"History of CAD",PAOD~"History of PAOD"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MV_Glycophorin_MACE90d.docx")
+```
+# MALE and FEMALE dataset 
+```{r male and female subset}
+## Male
+ExpressScan_Male <- as.data.frame(subset(ExpressScan, Gender == "male", drop=TRUE)) # 1 = "male"
+
+## Female
+ExpressScan_Female <- as.data.frame(subset(ExpressScan, Gender == "female", drop=TRUE)) # 0 = "female"
+```
+# MALE
+# MALE: Adj.Glycophorin ~ Plaquesize + baseline characteristics associations
+This still takes a manual step to create a table, I have copied and pasted all the adj. beta's with 95%CI from the baseline characteristics in one table. (Note that this table is only used to find potential confounders for multivariable regression analysis)
+```{r male Baseline characteristics}
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Age, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ TC_final, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ LDL_final, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Hospital, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ SmokerCurrent, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ SmokerStatus, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Med.all.antiplatelet, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Med.anticoagulants, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ CAD_history, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ PAOD, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ BMI, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ diastoli, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ systolic, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ GFR_MDRD, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ HDL_final, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ TG_final, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ DiabetesStatus, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Hypertension.selfreport, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Med.Statin.LLD, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Hypertension.drugs, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Peripheral.interv, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ StrokeTIA_history, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ stenosis_con_bin, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Symptoms.4g, data=ExpressScan_Male) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Stenosis_ipsilateral, data=ExpressScan_Male) %>% tbl_regression() # Note to self: tested this with `Stenosis_ipsilateral_70-99%` and `Stenosis_ipsilateral_50-70%` which gives very similar results
+# Age, LDL_final, Hospital, SmokerCurrent, SmokerStatus, Med.all.antiplatelet, Med.anticoagulants, PAOD, systolic, Symptoms.4g, Stenosis_ipsilateral
+```
+# MALE: Univariable and Multivariable associations with MACE 3years (baseline + Glycophorin)
+```{r male UV and MV MACE 3y}
+ExpressScan_Male$epmajor.3years<-as.numeric(ExpressScan_Male$epmajor.3years)
+ExpressScan_Male %>%
+  select(ep_major_t_3years, epmajor.3years,Age,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,Stenosis_ipsilateral,stenosis_con_bin,Symptoms.4g,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`) %>%
+  tbl_uvregression(
+    method = survival::coxph,
+    y = Surv(ep_major_t_3years, epmajor.3years),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MALE_BaselineMACE.docx")
+
+# Glycophorin C ~ MACE (adj for plaquesize)
+GLYCC <- coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank,data=ExpressScan_Male)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MALE_UV_Glycophorin_MACE.docx")
+
+# Glycophorin C ~ MACE (adj for plaquesize + confounders)
+GLYCC <- coxph(Surv(ep_major_t_3years,epmajor.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+SmokerStatus+Med.all.antiplatelet+Med.anticoagulants+PAOD+`Stenosis_ipsilateral_50-70%`+`Stenosis_ipsilateral_70-99%`, data=ExpressScan_Male)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",Age~"Age - years",SmokerStatus~"Smoking Status",Med.all.antiplatelet~"Use of antiplatelet drugs",Med.anticoagulants~"Use of oral anticoagulants",PAOD~"History of PAOD",`Stenosis_ipsilateral_50-70%`~"ipsilateral carotid stenosis 50-70%",`Stenosis_ipsilateral_70-99%`~"ipsilateral carotid stenosis 70-99%"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MALE_MV_Glycophorin_MACE.docx")
+```
+# MALE: Univariable and Multivariable associations with symptoms (Asymptomatic versus symptomatic) (baseline + Glycophorin)
+```{r male UV and MV symptoms}
+# Creating the Univariable associations baseline characteristics with symptoms table
+ExpressScan_Male %>%
+  select(AsymptSympt2G,Hospital,Age,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`,stenosis_con_bin) %>%
+  tbl_uvregression(
+    method = glm,
+    y = AsymptSympt2G,
+    method.args = list(family = binomial),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MALE_BaselineSymptoms.docx")
+
+# Glycophorin C ~ symptoms (adj for plaquesize)
+GLYCC <- glm(AsymptSympt2G~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan_Male)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MALE_UV_Glycophorin_Symptoms.docx")
+
+# Glycophorin C ~ symptoms (adj for plaquesize + confounders)
+GLYCC <- glm(AsymptSympt2G~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+SmokerStatus+PAOD+Med.all.antiplatelet+`Stenosis_ipsilateral_50-70%`+`Stenosis_ipsilateral_70-99%`, family="binomial", data=ExpressScan_Male)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",Age~"Age - years",SmokerStatus~"Smoking Status",Med.all.antiplatelet~"Use of antiplatelet drugs",PAOD~"History of PAOD",`Stenosis_ipsilateral_50-70%`~"ipsilateral carotid stenosis 50-70%",`Stenosis_ipsilateral_70-99%`~"ipsilateral carotid stenosis 70-99%"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MALE_MV_Glycophorin_Symptoms.docx")
+```
+# MALE: Univariable and Multivariable associations with IPH.bin (baseline + Glycophorin)
+```{r male UV and MV IPH}
+# Creating the Univariable associations baseline characteristics with symptoms table
+ExpressScan_Male %>%
+  select(IPH.bin,Hospital,Age,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,Stenosis_ipsilateral,stenosis_con_bin,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`) %>%
+  tbl_uvregression(
+    method = glm,
+    y = IPH.bin,
+    method.args = list(family = binomial),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MALE_BaselineIPH.docx")
+
+# Glycophorin C ~ IPH.bin (adj for plaquesize)
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan_Male)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MALE_UV_Glycophorin_IPH.docx")
+
+# Glycophorin C ~ IPH.bin (adj for plaquesize + confounders)
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank+systolic+`Stenosis_ipsilateral_50-70%`+`Stenosis_ipsilateral_70-99%`, family="binomial", data=ExpressScan_Male)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",systolic~"Systolic BP",`Stenosis_ipsilateral_50-70%`~"ipsilateral carotid stenosis 50-70%",`Stenosis_ipsilateral_70-99%`~"ipsilateral carotid stenosis 70-99%"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MALE_MV_Glycophorin_IPH.docx")
+```
+# MALE: Univariable and Multivariable associations IPH.bin ~ MACE
+```{r male UV and MV IPH-MACE}
+# UV IPH model
+GLYCC <- coxph(Surv(ep_major_t_3years,epmajor.3years)~IPH.bin,data=ExpressScan_Male)
+GLYCC %>%  tbl_regression(label= list(IPH.bin~"Intraplaque hemorrhage"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MALE_UV_IPH_MACE.docx")
+
+# MV IPH model:
+GLYCC <- coxph(Surv(ep_major_t_3years,epmajor.3years)~IPH.bin+DiabetesStatus+CAD_history+Peripheral.interv+`Stenosis_ipsilateral_50-70%`+`Stenosis_ipsilateral_70-99%`,data=ExpressScan_Male)
+GLYCC %>%  tbl_regression(label= list(IPH.bin~"Intraplaque hemorrhage",DiabetesStatus~"Diabetes Mellitus",CAD_history~"History of CAD",Peripheral.interv~"History of peripheral interventions",`Stenosis_ipsilateral_50-70%`~"ipsilateral carotid stenosis 50-70%",`Stenosis_ipsilateral_70-99%`~"ipsilateral carotid stenosis 70-99%"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "MALE_MV_IPH_MACE.docx")
+```
+
+# FEMALE
+# FEMALE: Adj.Glycophorin ~ Plaquesize + baseline characteristics associations
+This still takes a manual step to create a table, I have copied and pasted all the adj. beta's with 95%CI from the baseline characteristics in one table. (Note that this table is only used to find potential confounders for multivariable regression analysis)
+```{r female baseline}
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Age, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ TC_final, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ LDL_final, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Hospital, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ SmokerCurrent, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ SmokerStatus, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Med.all.antiplatelet, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Med.anticoagulants, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ CAD_history, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ PAOD, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ BMI, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ diastoli, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ systolic, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ GFR_MDRD, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ HDL_final, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ TG_final, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ DiabetesStatus, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Hypertension.selfreport, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Med.Statin.LLD, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Hypertension.drugs, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Peripheral.interv, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ StrokeTIA_history, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ stenosis_con_bin, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Symptoms.4g, data=ExpressScan_Female) %>% tbl_regression()
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ Stenosis_ipsilateral, data=ExpressScan_Female) %>% tbl_regression() # Note to self: tested this with `Stenosis_ipsilateral_70-99%` and `Stenosis_ipsilateral_50-70%` which gives very similar results
+```
+# FEMALE: Univariable and Multivariable associations with MACE 3years (baseline + Glycophorin)
+```{r female UV and MV MACE 3y}
+ExpressScan_Female$epmajor.3years<-as.numeric(ExpressScan_Female$epmajor.3years)
+ExpressScan_Female %>%
+  select(ep_major_t_3years, epmajor.3years,Hospital,Age,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,Stenosis_ipsilateral,stenosis_con_bin,Symptoms.4g,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`) %>%
+  tbl_uvregression(
+    method = survival::coxph,
+    y = Surv(ep_major_t_3years, epmajor.3years),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "FEMALE_BaselineMACE.docx")
+
+# Glycophorin C ~ MACE (adj for plaquesize)
+GLYCC <- coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank,data=ExpressScan_Female)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "FEMALE_UV_Glycophorin_MACE.docx")
+
+# Glycophorin C ~ MACE (adj for plaquesize + confounders)
+GLYCC <- coxph(Surv(ep_major_t_3years,epmajor.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+Hospital+TC_final+LDL_final,data=ExpressScan_Female)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",Age~"Age - years",Hospital~"Hospital",TC_final~"Total cholesterol – mmol/L",LDL_final~"LDL – mmol/L"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "FEMALE_MV_Glycophorin_MACE.docx")
+```
+# FEMALE: Univariable and Multivariable associations with symptoms (Asymptomatic versus symptomatic) (baseline + Glycophorin)
+```{r female UV and MV symptoms}
+# Creating the Univariable associations baseline characteristics with symptoms table
+ExpressScan_Female %>%
+  select(AsymptSympt2G,Hospital,Age,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`,stenosis_con_bin) %>%
+  tbl_uvregression(
+    method = glm,
+    y = AsymptSympt2G,
+    method.args = list(family = binomial),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() %>% as_flex_table() %>% flextable::save_as_docx(path = "FEMALE_BaselineSymptoms.docx")
+
+# Glycophorin C ~ symptoms (adj for plaquesize)
+GLYCC <- glm(AsymptSympt2G~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan_Female)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "FEMALE_UV_Glycophorin_Symptoms.docx")
+
+# Glycophorin C ~ symptoms (adj for plaquesize + confounders)
+GLYCC <- glm(AsymptSympt2G~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+Hospital+TG_final, family="binomial", data=ExpressScan_Female)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)",Age~"Age - years",Hospital~"Hospital", TG_final~"Triglycerides – mmol/L"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "FEMALE_MV_Glycophorin_Symptoms.docx")
+```
+
+# FEMALE: Univariable and Multivariable associations with IPH.bin (baseline + Glycophorin)
+```{r female UV and MV IPH}
+# Creating the Univariable associations baseline characteristics with symptoms table
+ExpressScan_Female %>%
+  select(IPH.bin,Hospital,Age,systolic,diastoli,Hypertension.selfreport,DiabetesStatus,risk614,TC_final,LDL_final,HDL_final,TG_final,BMI,GFR_MDRD,SmokerStatus,CAD_history,PAOD,Peripheral.interv,StrokeTIA_history,Hypertension.drugs,Med.Statin.LLD,Med.all.antiplatelet,Med.anticoagulants,Stenosis_ipsilateral,stenosis_con_bin,`Stenosis_ipsilateral_50-70%`,`Stenosis_ipsilateral_70-99%`) %>%
+  tbl_uvregression(
+    method = glm,
+    y = IPH.bin,
+    method.args = list(family = binomial),
+    exponentiate = TRUE,
+    pvalue_fun = ~style_pvalue(.x, digits = 2)
+  ) %>%
+  add_global_p() %>%  # add global p-value 
+  add_nevent() %>%    # add number of events of the outcome
+  bold_p() %>%        # bold p-values under a given threshold (default 0.05)
+  bold_labels() %>% italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "FEMALE_BaselineIPH.docx")
+
+# Glycophorin C ~ IPH.bin (adj for plaquesize)
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan_Female)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() %>% as_flex_table() %>% flextable::save_as_docx(path = "FEMALE_UV_Glycophorin_IPH.docx")
+
+# Glycophorin C ~ IPH.bin (adj for plaquesize + confounders)
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan_Female)
+GLYCC %>%  tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "FEMALE_MV_Glycophorin_IPH.docx")
+
+# The multivariable model of Glycophorin ~ IPH was entirely the same as the UV model, due to no association between IPH and baseline characteristics in female patients
+```
+# FEMALE: Univariable and Multivariable associations IPH.bin ~ MACE
+```{r female UV and MV IPH-MACE}
+# UV IPH model
+GLYCC <- coxph(Surv(ep_major_t_3years,epmajor.3years)~IPH.bin,data=ExpressScan_Female)
+GLYCC %>%  tbl_regression(label= list(IPH.bin~"Intraplaque hemorrhage"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() %>% as_flex_table() %>% flextable::save_as_docx(path = "FEMALE_UV_IPH_MACE.docx")
+
+# MV IPH model:
+GLYCC <- coxph(Surv(ep_major_t_3years,epmajor.3years)~IPH.bin,data=ExpressScan_Female)
+GLYCC %>%  tbl_regression(label= list(IPH.bin~"Intraplaque hemorrhage"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.10) %>%
+  bold_labels() %>%
+  italicize_levels() #%>% as_flex_table() %>% flextable::save_as_docx(path = "FEMALE_MV_IPH_MACE.docx")
+
+# The multivariable model of IPH ~ MACE was entirely the same as the UV model, due to no association between IPH and baseline characteristics in female patients
+```
+# MICE Imputation of missing variables
+```{r MICE imputation}
+imp.variables <- c("STUDY_NUMBER","Age","Hospital", "diastoli", "systolic","TC_final_LN", "LDL_final_LN", "HDL_final_LN", "TG_final_LN","GFR_MDRD", "BMI_LN","Gender", "DiabetesStatus", "SmokerStatus", "Hypertension.selfreport", "risk614","Med.Statin.LLD", "Hypertension.drugs","Med.all.antiplatelet", "Med.anticoagulants", "CAD_history", "PAOD", "Peripheral.interv", "StrokeTIA_history", "SmokerCurrent", "stenosis_con_bin","Symptoms.4g","epmajor.3years","ep_major_t_3years","Total_GLYCC_Tissue_rank","TotalTissue_rank","AsymptSympt2G","ep_stroke_t_3years", "epstroke.3years","Stenosis_ipsilateral","IPH.bin","ep_coronary_t_3years", "epcoronary.3years","ep_stroke_t_3years", "epstroke.3years", "ep_cvdeath_t_3years", "epcvdeath.3years","ep_major_t_30days", "epmajor.30days", "ep_major_t_90days", "epmajor.90days")
+
+toimp.variables <- c("TC_final_LN", "HDL_final_LN", "LDL_final_LN", "TG_final_LN", "GFR_MDRD","stenosis_con_bin", "Stenosis_ipsilateral")
+ES_preimp <- subset(ExpressScan[imp.variables])
+
+imp <- mice(ES_preimp, maxit=0)
+head(imp$loggedEvents, 2) # loggedEvents = 4 (collinearity)
+imp$loggedEvents
+
+imp$visitSequence
+
+meth = imp$method
+meth
+# Extract predictorMatrix and methods of imputation 
+predM = imp$predictorMatrix
+predM
+# Setting values of variables I'd like to leave out to 0 in the predictor matrix
+predM[c("STUDY_NUMBER","Age","Hospital", "diastoli", "systolic", "BMI_LN","Gender", "Hospital", "DiabetesStatus", "SmokerStatus", "Hypertension.selfreport", "risk614","Med.Statin.LLD", "Hypertension.drugs","Med.all.antiplatelet", "Med.anticoagulants", "CAD_history", "PAOD", "Peripheral.interv", "StrokeTIA_history", "SmokerCurrent","Symptoms.4g","epmajor.3years","ep_major_t_3years","Total_GLYCC_Tissue_rank","TotalTissue_rank","AsymptSympt2G","ep_stroke_t_3years", "epstroke.3years","IPH.bin","ep_coronary_t_3years", "epcoronary.3years","ep_stroke_t_3years", "epstroke.3years", "ep_cvdeath_t_3years", "epcvdeath.3years","ep_major_t_30days", "epmajor.30days", "ep_major_t_90days", "epmajor.90days"),] <- 0 # row: do not predict
+
+predM[,c("STUDY_NUMBER", "epmajor.3years","ep_major_t_3years","Total_GLYCC_Tissue_rank","TotalTissue_rank","AsymptSympt2G","ep_stroke_t_3years", "epstroke.3years","IPH.bin","ep_coronary_t_3years", "epcoronary.3years","ep_stroke_t_3years", "epstroke.3years", "ep_cvdeath_t_3years", "epcvdeath.3years","ep_major_t_30days", "epmajor.30days", "ep_major_t_90days", "epmajor.90days","SmokerStatus")] <- 0 # column: do not use as predictor
+# If you like, view the first few rows of the predictor matrix
+head(predM)
+
+# Specify a separate imputation model for variables of interest 
+# Continous variables
+pmm <-c("GFR_MDRD","HDL_final_LN","TC_final_LN","LDL_final_LN", "TG_final_LN")
+# Dichotomous variables
+logreg <-c("stenosis_con_bin")
+# Ordered categorical variables 
+#polr <-c("Stenosis_ipsilateral")
+# Unordered categorical variables
+polyreg <- c("Stenosis_ipsilateral")
+empty <-c("STUDY_NUMBER","Age","Hospital", "diastoli", "systolic", "BMI_LN","Gender", "Hospital", "DiabetesStatus", "SmokerStatus", "Hypertension.selfreport", "risk614","Med.Statin.LLD", "Hypertension.drugs","Med.all.antiplatelet", "Med.anticoagulants", "CAD_history", "PAOD", "Peripheral.interv", "StrokeTIA_history","SmokerCurrent","Symptoms.4g","epmajor.3years","ep_major_t_3years","Total_GLYCC_Tissue_rank","TotalTissue_rank","AsymptSympt2G","ep_stroke_t_3years", "epstroke.3years","IPH.bin","ep_coronary_t_3years", "epcoronary.3years","ep_stroke_t_3years", "epstroke.3years", "ep_cvdeath_t_3years", "epcvdeath.3years","ep_major_t_30days", "epmajor.30days", "ep_major_t_90days", "epmajor.90days")
+
+# Turn their methods matrix into the specified imputation models
+meth[pmm] = "pmm"
+meth[logreg] ="logreg"
+#meth[polr] ="polr"
+#meth[polyreg]="polyreg"
+meth[empty] = ""
+meth
+
+# It is convenient to set  m = 5 during model building, and increase  m only after being satisfied with the model for the "final" round of imputation. So if calculation is not prohibitive, we may set m to the average percentage of missing data. The substantive conclusions are unlikely to change as a result of raising  m beyond  m=5.
+ES_imputing_dataset <- mice(ES_preimp, m=25, predictorMatrix = predM, method = meth, seed=145, print=FALSE,maxit=30, visitSequence = "monotone", ridge= 0.01) #maxit=30
+ES_imputing_dataset$loggedEvents
+
+head(ES_imputing_dataset$loggedEvents) 
+plot(ES_imputing_dataset,toimp.variables)
+class(ES_imputing_dataset)
+
+# Pick one of the 25 datasets from the imputated datasets (used for testing, number of events for survival analysis and testing how many missing's per variable are still included in the dataset)
+ES_test <- complete(ES_imputing_dataset,2)
+
+# How missing's are still in the set?
+p_missing <- unlist(lapply(ES_test, function(x) sum(is.na(x))))/nrow(ES_test)
+sort(p_missing[p_missing > 0], decreasing = TRUE)
+```
+# Creating Male and Female imputated datasets
+```{r subsets imputated dataframe}
+ES_imputing_complete <- complete(ES_imputing_dataset,action='long',inc=T)
+ES_imputing_male <- subset(ES_imputing_complete, Gender == "male", drop = TRUE)
+ES_imputing_female <- subset(ES_imputing_complete, Gender == "female", drop = TRUE)
+
+ES_imputing_male <- as.mids(ES_imputing_male)
+ES_imputing_female <- as.mids(ES_imputing_female)
+
+ES_test_male <- as.data.frame(subset(ES_test, Gender =="male", drop=TRUE)) # 0 = "female"
+ES_test_female <- as.data.frame(subset(ES_test, Gender =="female", drop=TRUE)) # 0 = "female"
+```
+# Associations with the imputated data
+# Full cohort: Multivariable association with MACE 3 years
+```{r full MV MACE 3y imputated}
+# Using the imputated data
+GLYCC <- with(ES_imputing_dataset, coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final_LN+LDL_final_LN+SmokerCurrent+Med.all.antiplatelet+Med.anticoagulants+CAD_history+PAOD))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE)
+
+# How many event's, number of observations and how many missings
+GLYCC <- coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final_LN+LDL_final_LN+SmokerCurrent+Med.all.antiplatelet+Med.anticoagulants+CAD_history+PAOD,data=ES_test) # 177 events n=1540 278 observations missings
+ggforest(GLYCC)
+summary(GLYCC)
+```
+# Full cohort: Multivariable association with Symptoms (Asymptomatic versus Symptomatic)
+```{r full MV symptoms imputated}
+# Using the imputated data (p=0.00187) # doesn't change that much --> so for symptoms, the non-imputed dataset will be used.
+GLYCC <- with(ES_imputing_dataset, glm(AsymptSympt2G~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+Gender+Hospital+SmokerStatus+CAD_history+PAOD+Med.all.antiplatelet+Stenosis_ipsilateral, family="binomial"))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE) 
+```
+# Full cohort: Multivariable association with IPH.bin
+```{r full MV IPH imputated}
+# Using the imputated data is not needed covariates were not imputated
+GLYCC <- with(ES_imputing_dataset, glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank+Gender+Hospital+CAD_history, family="binomial"))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE) 
+```
+# Full cohort: Multivariable association with IPH ~ MACE 3 years
+```{r full MV IPH-MACE imputated}
+# Using the imputated data is not needed covariates were not imputated
+GLYCC <- with(ES_imputing_dataset, coxph(Surv(ep_major_t_3years, epmajor.3years)~IPH.bin+CAD_history))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE)
+
+# How many event's, number of observations and how many missings
+GLYCC <- coxph(Surv(ep_major_t_3years, epmajor.3years)~IPH.bin+CAD_history,data=ES_test) # 177 events n=1540 278 observations missings
+ggforest(GLYCC)
+```
+# Full cohort: Multivariable association with CAD 3 years
+```{r full MV CAD 3yr imputated}
+# Using the imputated data is not needed covariates were not imputated
+GLYCC <- with(ES_imputing_dataset, coxph(Surv(ep_coronary_t_3years, epcoronary.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+CAD_history+PAOD))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE)
+
+GLYCC <- coxph(Surv(ep_coronary_t_3years, epcoronary.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+CAD_history+PAOD ,data=ES_test)
+ggforest(GLYCC)
+```
+# Full cohort: Multivariable association with Stroke 3 years
+```{r full MV Stroke 3yr imputated}
+GLYCC <- with(ES_imputing_dataset, coxph(Surv(ep_stroke_t_3years, epstroke.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final_LN+LDL_final_LN+Med.all.antiplatelet+Med.anticoagulants))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE)
+
+GLYCC <- coxph(Surv(ep_stroke_t_3years, epstroke.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final_LN+LDL_final_LN+Med.all.antiplatelet+Med.anticoagulants,data=ES_test)
+ggforest(GLYCC)
+```
+# Full cohort: Multivariable association with CV death 3 years
+```{r full MV CV death 3yr imputated}
+GLYCC <- with(ES_imputing_dataset, coxph(Surv(ep_cvdeath_t_3years, epcvdeath.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final_LN+LDL_final_LN+Med.all.antiplatelet+Med.anticoagulants + PAOD + CAD_history))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE)
+
+GLYCC <- coxph(Surv(ep_cvdeath_t_3years, epcvdeath.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final_LN+LDL_final_LN+Med.all.antiplatelet+Med.anticoagulants + PAOD + CAD_history,data=ES_test)
+ggforest(GLYCC)
+```
+# Full cohort: Multivariable association with MACE 30 days
+```{r full MV MACE 30 days imputated}
+GLYCC <- with(ES_imputing_dataset, coxph(Surv(ep_major_t_30days, epmajor.30days)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final_LN+Hospital+CAD_history))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE)
+
+GLYCC <- coxph(Surv(ep_major_t_30days, epmajor.30days)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final_LN+Hospital+CAD_history,data=ES_test)
+ggforest(GLYCC)
+```
+# Full cohort: Multivariable association with MACE 90 days
+```{r full MV MACE 90 days imputated}
+GLYCC <- with(ES_imputing_dataset, coxph(Surv(ep_major_t_90days, epmajor.90days)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final_LN+Med.all.antiplatelet+Med.anticoagulants+PAOD+CAD_history))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE)
+
+GLYCC <- coxph(Surv(ep_major_t_90days, epmajor.90days)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+TC_final_LN+Med.all.antiplatelet+Med.anticoagulants + PAOD + CAD_history,data=ES_test)
+ggforest(GLYCC)
+```
+# MALE: Multivariable association with MACE 3 years
+```{r male MV MACE imputated}
+# Using the imputated data
+GLYCC <- with(ES_imputing_male, coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+SmokerStatus+Med.all.antiplatelet+Med.anticoagulants+PAOD+Stenosis_ipsilateral))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE)
+
+# How many event's, number of observations and how many missings
+GLYCC <- coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+SmokerStatus+Med.all.antiplatelet+Med.anticoagulants+PAOD+Stenosis_ipsilateral,data=ES_test_male) # 177 events n=1540 278 observations missings
+ggforest(GLYCC)
+```
+# MALE: Multivariable association with Symptoms (Asymptomatic versus Symptomatic)
+```{r male MV symptoms imputated}
+# Using the imputated data # doesn't change that much --> so for symptoms, the non-imputed dataset will be used.
+GLYCC <- with(ES_imputing_male, glm(AsymptSympt2G~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+SmokerStatus+PAOD+Med.all.antiplatelet+Stenosis_ipsilateral, family="binomial"))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE)
+```
+# MALE: Multivariable association with IPH.bin
+```{r male MV IPH imputated}
+# Using the imputated data # doesn't change that much --> so for IPH, the non-imputed dataset will be used.
+GLYCC <- with(ES_imputing_male, glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank+systolic+Stenosis_ipsilateral, family="binomial"))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE) 
+```
+# MALE: Multivariable association with IPH ~ MACE 3 years
+```{r male MV IPH-MACE imputated}
+# Using the imputated data # doesn't change that much --> so for IPH, the non-imputed dataset will be used.
+GLYCC <- with(ES_imputing_male, coxph(Surv(ep_major_t_3years, epmajor.3years)~IPH.bin+DiabetesStatus+CAD_history+Peripheral.interv+Stenosis_ipsilateral))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE)
+```
+# FEMALE: Multivariable association with MACE 3 years
+```{r female MV MACE imputated}
+# Using the imputated data
+GLYCC <- with(ES_imputing_female, coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+Hospital+TC_final_LN+LDL_final_LN))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE)
+
+# How many event's, number of observations and how many missings
+GLYCC <- coxph(Surv(ep_major_t_3years, epmajor.3years)~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+Hospital+TC_final_LN+LDL_final_LN,data=ES_test_female) 
+ggforest(GLYCC)
+summary(GLYCC)
+```
+# FEMALE: Multivariable association with Symptoms (Asymptomatic versus Symptomatic)
+```{r female MV symptoms imputated}
+GLYCC <- with(ES_imputing_female, glm(AsymptSympt2G~Total_GLYCC_Tissue_rank+TotalTissue_rank+Age+Hospital+TG_final_LN, family="binomial"))
+summary(pool(GLYCC), conf.int=TRUE, conf.level=0.95, exponentiate=TRUE)
+```
+# FEMALE: Multivariable association with IPH.bin and Multivariable association with IPH ~ MACE 3 years
+Were both the same as the univariable models since IPH.bin was not associated with any of the baseline characteristics
+
+
+# Full cohort plaque characteristics
+```{r plaque characteristics}
+plaque_vars <- ExpressScan %>% 
+  select(STUDY_NUMBER,Calc.bin, Collagen.bin, Fat.bin_10, Fat.bin_40, 
+         Macrophages.bin, SMC.bin)
+
+plaque_vars[2:7][plaque_vars[2:7]==1] <- 0
+plaque_vars[2:7][plaque_vars[2:7]==2] <- 1
+
+ExpressScan_plaque <- ExpressScan %>% 
+  left_join(
+    plaque_vars
+  )
+
+# "Calc.bin", "Collagen.bin", "Fat.bin_10", "Fat.bin_40", "IPH.bin", 
+# "Macrophages.bin", "SMC.bin"
+
+Fat <- glm(Fat.bin_40~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_plaque, family=binomial)
+exp(coefficients(Fat))
+exp(confint(Fat))
+
+Calc <- glm(Calc.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_plaque, family=binomial)
+exp(coefficients(Calc))
+exp(confint(Calc))
+
+Collagen <- glm(Collagen.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_plaque, family=binomial)
+exp(coefficients(Collagen))
+exp(confint(Collagen))
+summary(Collagen)
+
+SMC <- glm(SMC.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_plaque, family=binomial)
+exp(coefficients(SMC))
+exp(confint(SMC))
+summary(SMC)
+
+Macrophages <- glm(Macrophages.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_plaque, family=binomial)
+exp(coefficients(Macrophages))
+exp(confint(Macrophages))
+
+IPH <- glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_plaque, family=binomial)
+exp(coefficients(IPH))
+exp(confint(IPH))
+summary(IPH)
+
+# MALE
+Fat <- glm(Fat.bin_40~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_Male, family=binomial)
+exp(coefficients(Fat))
+exp(confint(Fat))
+summary(Fat)
+
+Calc <- glm(Calc.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_Male, family=binomial)
+exp(coefficients(Calc))
+exp(confint(Calc))
+summary(Calc)
+
+Collagen <- glm(Collagen.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_Male, family=binomial)
+exp(coefficients(Collagen))
+exp(confint(Collagen))
+summary(Collagen)
+
+SMC <- glm(SMC.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_Male, family=binomial)
+exp(coefficients(SMC))
+exp(confint(SMC))
+summary(SMC)
+
+Macrophages <- glm(Macrophages.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_Male, family=binomial)
+exp(coefficients(Macrophages))
+exp(confint(Macrophages))
+
+IPH <- glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_Male, family=binomial)
+exp(coefficients(IPH))
+exp(confint(IPH))
+summary(IPH)
+
+# FEMALE
+Fat <- glm(Fat.bin_40~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_Female, family=binomial)
+exp(coefficients(Fat))
+exp(confint(Fat))
+summary(Fat)
+
+Calc <- glm(Calc.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_Female, family=binomial)
+exp(coefficients(Calc))
+exp(confint(Calc))
+summary(Calc)
+
+Collagen <- glm(Collagen.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_Female, family=binomial)
+exp(coefficients(Collagen))
+exp(confint(Collagen))
+summary(Collagen)
+
+SMC <- glm(SMC.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_Female, family=binomial)
+exp(coefficients(SMC))
+exp(confint(SMC))
+summary(SMC)
+
+Macrophages <- glm(Macrophages.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_Female, family=binomial)
+exp(coefficients(Macrophages))
+exp(confint(Macrophages))
+summary(Macrophages)
+
+IPH <- glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, data=ExpressScan_Female, family=binomial)
+exp(coefficients(IPH))
+exp(confint(IPH))
+summary(IPH)
+
+
+#Plaque phenotype
+summary(ExpressScan$plaquephenotype)
+table(ExpressScan$plaquephenotype, ExpressScan$ORyear, useNA="always") # missings are from recent years. 
+
+
+ExpressScan_test <- ExpressScan %>%dplyr::select(plaquephenotype,Total_GLYCC_Tissue_rank,TotalTissue_rank,PercentageSTAIN)
+ExpressScan_test <- subset(ExpressScan_test, plaquephenotype != "not judgeable")
+summary(ExpressScan_test$plaquephenotype)
+ExpressScan_test <- droplevels(ExpressScan_test)
+summary(ExpressScan_test$plaquephenotype)
+
+ExpressScan_test$plaquephenotype <- revalue(ExpressScan_test$plaquephenotype, c("fibrous"="Fibrous","fibroatheromatous"="Fibroatheromatous","atheromatous"="Atheromatous"))
+
+lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ plaquephenotype, data=ExpressScan_test) %>% tbl_regression() 
+
+setwd("~/surfdrive/2. Projecten/2. Glycophorin manuscript/_Manuscript Glycophorin revised/_Figures")
+
+tiff("plaquephenotype.tiff", units="in", width=7, height=5, res=300)
+ggpubr::ggboxplot(ExpressScan_test,
+                  x = c("plaquephenotype"),
+                  y = "PercentageSTAIN", 
+                  # xlab = "Group",
+                  ylab = "Percentage Glycophorin C Stain",
+                  xlab = "Plaque phenotype",
+                  color = "plaquephenotype",
+                  palette = c("#5EB17F", "#1290D9","#D5267B"),
+                  add = "jitter") + theme(legend.position="right") #+ stat_compare_means(method = "kruskal") 
+dev.off()
+
+kruskal.test(PercentageSTAIN ~ plaquephenotype, data = ExpressScan_test)
+pairwise.wilcox.test(ExpressScan_test$PercentageSTAIN, ExpressScan_test$plaquephenotype, p.adjust.method = "none")
+
+
+
+ExpressScan$IPH.bin <- revalue(ExpressScan$IPH.bin, c("no"="No","yes"="Yes"))
+tiff("IPH.bin.tiff", units="in", width=7, height=5, res=300)
+ggpubr::ggboxplot(ExpressScan %>% filter(!is.na(IPH.bin)),
+                  x = c("IPH.bin"),
+                  y = "PercentageSTAIN", 
+                  # xlab = "Group",
+                  ylab = "Percentage Glycophorin C Stain",
+                  xlab = "Intraplaque hemorrhage",
+                  color = "IPH.bin",
+                  palette = c("#5EB17F", "#1290D9"),
+                  add = "jitter") + theme(legend.position="right") #+ stat_compare_means(method = "kruskal") 
+dev.off()
+
+summary(factor(ExpressScan$IPH.bin))
+
+```
+
+
+```
+```{r}
+plaque_vars <- ExpressScan %>% 
+  select(STUDY_NUMBER, Calc.bin, Collagen.bin, Fat.bin_10, Fat.bin_40, 
+         Macrophages.bin, SMC.bin,IPH.bin)
+
+plaque_vars[2:7][plaque_vars[2:7]==1] <- 0
+plaque_vars[2:7][plaque_vars[2:7]==2] <- 1
+
+ExpressScan_plaque <- ExpressScan %>% 
+  left_join(
+    plaque_vars
+  )
+summary(plaque_vars)
+
+GLYCC <- glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan)
+summary(GLYCC)
+exp(coefficients(GLYCC))
+exp(confint(GLYCC))
+
+# "Calc.bin", "Collagen.bin", "Fat.bin_10", "Fat.bin_40", "IPH.bin", 
+# "Macrophages.bin", "SMC.bin"
+
+model1 <- glm(Calc.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan) %>% tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.05) %>%
+  bold_labels() %>%
+  italicize_levels() 
+
+model2 <- glm(Collagen.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan) %>% tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.05) %>%
+  bold_labels() %>%
+  italicize_levels() 
+
+model3 <- glm(Fat.bin_40~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan) %>% tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.05) %>%
+  bold_labels() %>%
+  italicize_levels() 
+
+model4 <- glm(IPH.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan) %>% tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.05) %>%
+  bold_labels() %>%
+  italicize_levels() 
+
+model5 <- glm(Macrophages.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan) %>% tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.05) %>%
+  bold_labels() %>%
+  italicize_levels() 
+
+model6 <- glm(SMC.bin~Total_GLYCC_Tissue_rank+TotalTissue_rank, family="binomial", data=ExpressScan) %>% tbl_regression(label= list(Total_GLYCC_Tissue_rank~"Glycophorin staining",TotalTissue_rank~"Plaquesize (microm^2)"),
+    exponentiate = TRUE, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+  ) %>% 
+  modify_header(label ~ "**Variable**") %>%
+  add_global_p() %>%
+  add_nevent() %>%
+  bold_p(t = 0.05) %>%
+  bold_labels() %>%
+  italicize_levels() 
+
+model1
+model2
+model3
+model4
+model5
+model6
+
+# "Calc.bin", "Collagen.bin", "Fat.bin_10", "Fat.bin_40", "IPH.bin", 
+# "Macrophages.bin", "SMC.bin"
+```
+# Glycophorin image selection
+
+1) Veel staining
+2) Weinig staining
+3 + 4) Man / vrouw
+5) IPH nee
+6) IPH ja
+
+```{r}
+#Total_GLYCC_Tissue_rank
+
+t <- ExpressScan %>% select(STUDY_NUMBER, PercentageSTAIN, Gender, IPH.bin)
+t_male <- subset(t, Gender == "male")
+t_female <- subset(t, Gender == "female")
+t_iphyes <- subset(t, IPH.bin == "yes")
+t_iphno <- subset(t, IPH.bin == "no")
+```
+
+
+
+
+
+```{r include=FALSE}
+ggpubr::ggboxplot(ExpressScan %>% filter(!is.na(IPH.bin)),
+                  x = c("IPH.bin"),
+                  y = "PercentageSTAIN", 
+                  # xlab = "Group",
+                  ylab = "Percentage Glycophorin C stain",
+                  xlab = "Intraplaque hemorrhage",
+                  color = "IPH.bin",
+                  palette = c("#5EB17F", "#1290D9"),
+                  add = "jitter") + theme(legend.position="right") + stat_compare_means(method = "kruskal") 
+
+
+```
+
+
