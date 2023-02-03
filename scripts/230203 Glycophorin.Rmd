@@ -1194,7 +1194,7 @@ lm(Total_GLYCC_Tissue_rank~TotalTissue_rank+ plaquephenotype, data=ExpressScan_t
 
 setwd("~/surfdrive/2. Projecten/2. Glycophorin manuscript/_Manuscript Glycophorin revised/_Figures")
 
-tiff("plaquephenotype.tiff", units="in", width=7, height=5, res=300)
+#tiff("plaquephenotype.tiff", units="in", width=7, height=5, res=300)
 ggpubr::ggboxplot(ExpressScan_test,
                   x = c("plaquephenotype"),
                   y = "PercentageSTAIN", 
@@ -1204,12 +1204,15 @@ ggpubr::ggboxplot(ExpressScan_test,
                   color = "plaquephenotype",
                   palette = c("#5EB17F", "#1290D9","#D5267B"),
                   add = "jitter") + theme(legend.position="right") #+ stat_compare_means(method = "kruskal") 
-dev.off()
+#dev.off()
+std.error <- function(x) sd(x)/sqrt(length(x))
+setDT(ExpressScan_test)[,list(Mean=mean(PercentageSTAIN), Max=max(PercentageSTAIN), Min=min(PercentageSTAIN), Median=as.numeric(median(PercentageSTAIN)), SE=std.error(PercentageSTAIN)), by=plaquephenotype]
+
+
 
 kruskal.test(PercentageSTAIN ~ plaquephenotype, data = ExpressScan_test)
 pairwise.wilcox.test(ExpressScan_test$PercentageSTAIN, ExpressScan_test$plaquephenotype, p.adjust.method = "none")
-
-
+table(ExpressScan_test$PercentageSTAIN,ExpressScan_test$plaquephenotype)
 
 ExpressScan$IPH.bin <- revalue(ExpressScan$IPH.bin, c("no"="No","yes"="Yes"))
 tiff("IPH.bin.tiff", units="in", width=7, height=5, res=300)
