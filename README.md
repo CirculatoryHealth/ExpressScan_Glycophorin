@@ -4,7 +4,7 @@ Glycophorin C in carotid atherosclerotic plaque reflects intraplaque hemorrhage 
 [![DOI](https://zenodo.org/badge/386686370.svg)](https://zenodo.org/badge/latestdoi/386686370) [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/) ![Static Badge](https://img.shields.io/badge/r-script-brightgreen?logo=r&link=https%3A%2F%2Fwww.r-project.org) ![Static Badge](https://img.shields.io/badge/dataverse-blue?logo=dataverse&labelColor=595A5C&color=1290D9&link=https%3A%2F%2Fdoi.org%2F10.34894%2F08TUBV)
 
 ### This readme
-This readme accompanies the paper "Glycophorin C in carotid atherosclerotic plaque reflects intraplaque hemorrhage and pre-procedural neurological symptoms." by [J.M. Mekke _et al._ **medRxiv** 2021.](https://doi.org/10.1101/2021.07.15.21260570). 
+This readme accompanies the paper "Glycophorin C in carotid atherosclerotic plaque reflects intraplaque hemorrhage and pre-procedural neurological symptoms." by [J.M. Mekke _et al._ **medRxiv** 2021](https://doi.org/10.1101/2021.07.15.21260570). 
 
 --------------
 ### Abstract.
