@@ -23,6 +23,12 @@ Data as shared through [DataverseNL](https://doi.org/10.34894/08TUBV).
 
 --------------
 
+### Blog
+
+Earlier we wrote a [blog](https://www.vanderlaanscience.nl/posts/a-story-about-expressscan) about the journey and story behind this project: the **ExpressScan**.
+
+--------------
+
 ### Acknowledgements
 Dr. Sander W. van der Laan is funded through EU H2020 TO_AITION (grant number: 848146), EU HORIZON NextGen (grant number: 101136962), EU HORIZON MIRACLE (grant number: 101115381), and HealthHolland PPP Allowance ‘Getting the Perfect Image’.
 
