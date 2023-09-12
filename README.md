@@ -3,11 +3,14 @@ Glycophorin C in carotid atherosclerotic plaque reflects intraplaque hemorrhage 
 
 [![DOI](https://zenodo.org/badge/386686370.svg)](https://zenodo.org/badge/latestdoi/386686370) [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/) ![Static Badge](https://img.shields.io/badge/r-script-brightgreen?logo=r&link=https%3A%2F%2Fwww.r-project.org) ![Static Badge](https://img.shields.io/badge/dataverse-blue?logo=dataverse&labelColor=595A5C&color=1290D9&link=https%3A%2F%2Fdoi.org%2F10.34894%2F08TUBV)
 
+
 ### This readme
 This readme accompanies the paper "Glycophorin C in carotid atherosclerotic plaque reflects intraplaque hemorrhage and pre-procedural neurological symptoms." by [J.M. Mekke _et al._ **medRxiv** 2021](https://doi.org/10.1101/2021.07.15.21260570). 
 
 --------------
+
 ### Abstract.
+
 **Introduction** The accumulation of erythrocyte membranes within an atherosclerotic plaque may contribute to the deposition of free cholesterol and thereby the enlargement of the necrotic core. Erythrocyte membranes can be visualized and quantified in the plaque by immunostaining for the erythrocyte marker glycophorin C. Consequently, we hypothesized, that the accumulation of erythrocytes quantified by glycophorin C is a marker for plaque vulnerability and may therefore reflect intraplaque hemorrhage (IPH), vulnerability of plaques and predict pre-procedural neurological symptoms.
 
 **Methods** We visualized and quantified glycophorin C, defined as the total plaque area that is positive for glycophorin C, in single slides of culprit lesions of human atherosclerotic plaque samples, from 1,819 consecutive asymptomatic and symptomatic patients undergoing carotid endarterectomy from the Athero-Express Biobank with the _slideToolKit_ method. Lipid core, calcifications, collagen content, SMC content and macrophage burden were using a semi-quantitative scoring method, which was dichotomized for as no/minor or moderate/heavy staining according to predefined criteria. IPH was scored as either present or not present. 
@@ -16,8 +19,13 @@ This readme accompanies the paper "Glycophorin C in carotid atherosclerotic plaq
 
 **Conclusion** The accumulation of erythrocytes in atherosclerotic plaque quantified and visualized byglycophorin C was independently associated with the presence of IPH, symptomatic preprocedural symptoms in men, and with a more vulnerable plaque composition in both men and women. This strengthens the notion that the accumulation of erythrocytes quantified by glycophorin C can be used as a marker for plaque vulnerability.
 
-**Figure: Study design and flowchart of study participants** **A.** Graphical illustration of the study design. Created with BioRender.com. **B.** Number of individuals included in the current study.
-![Study design and flowchart of study participants](PLOTS/20230614.UMAP.png)
+<center>
+
+![Study design and flowchart of study participants](figures/main_figure.png){width=50%}</br>
+**Figure: Study design and flowchart of study participants** _A._ Graphical illustration of the study design. <span style="color:grey">Created with [BioRender.com](https://www.biorender.com){target="_blank"}.</span> _B._ Number of individuals included in the current study.
+
+</center>
+
 --------------
 
 ### Data availability
@@ -40,14 +48,6 @@ You can load this project in RStudio by opening the file called 'ExpressScan_Gly
 #### Project structure
 
 <!--  You can add rows to this table, using "|" to separate columns.         -->
-File                          | Description                | Usage         
------------------------------ | -------------------------- | --------------
-README.md                     | Description of project     | Human editable
-ExpressScan_Glycophorin.Rproj | Project file               | Loads project 
-LICENSE                       | User permissions           | Read only     
-.worcs                        | WORCS metadata YAML        | Read only     
-prepare_data.R                | Script to process raw data | Human editable
-
 File                                    | Description                          | Usage         
 --------------------------------------- | ------------------------------------ | --------------
 README.md                               | Description of project               | Human editable
@@ -101,9 +101,9 @@ Dr. Sander W. van der Laan has received Roche funding for unrelated work.
 
 #### Changes log
     
-    _Version:_      v1.0</br>
+    _Version:_      v1.1</br>
     _Last update:_  2023-09-12</br>
-    _Written by:_   Sander W. van der Laan (s.w.vanderlaan [at] gmail [dot] com).
+    _Written by:_   Joost M. Mekke | Sander W. van der Laan (s.w.vanderlaan [at] gmail [dot] com).
     
     **MoSCoW To-Do List**
     The things we Must, Should, Could, and Would have given the time we have.
@@ -116,7 +116,7 @@ Dr. Sander W. van der Laan has received Roche funding for unrelated work.
     _W_
 
     **Changes log**
-    * v1.0.0 Added WORCS. Added images. Added main figure. 
+    * v1.1.0 Added WORCS. Added images. Added main figure. 
     * v1.0.0 Initial version. 
 
 --------------

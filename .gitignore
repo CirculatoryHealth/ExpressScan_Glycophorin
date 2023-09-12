@@ -71,3 +71,14 @@ __pycache__
 
 # temporary lock figure
 figures/Figure1.png
+.Rhistory
+.Rprofile
+*.csv
+*.sav
+*.sas7bdat
+*.xlsx
+*.xls
+*.pdf
+*.fff
+*.log
+*.tex
