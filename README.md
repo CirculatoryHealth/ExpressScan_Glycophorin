@@ -1,6 +1,8 @@
 Glycophorin C in carotid atherosclerotic plaque reflects intraplaque hemorrhage and pre-procedural neurological symptoms.
 ===========================================================
 
+![DOI](https://zenodo.org/badge/386686370.svg)](https://zenodo.org/badge/latestdoi/386686370)
+
 ### This readme
 This readme accompanies the paper "Glycophorin C in carotid atherosclerotic plaque reflects intraplaque hemorrhage and pre-procedural neurological symptoms." by [J.M. Mekke _et al_](https://doi.org/10.1101/2021.07.15.21260570). 
 
