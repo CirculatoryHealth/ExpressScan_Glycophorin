@@ -41,7 +41,7 @@ Dr. Sander W. van der Laan has received Roche funding for unrelated work.
 
 --------------
 #### Creative Commons BY-NC-ND 4.0
-##### Copyright (c) 1979-2023 Sander W. van der Laan | s.w.vanderlaan [at] gmail [dot] com.
+##### Copyright (c) 1979-2023 Sander W. van der Laan (s.w.vanderlaan [at] gmail [dot] com) | Joost M. Mekke.
 
 This is a human-readable summary of (and not a substitute for) the [license](LICENSE). 
 
